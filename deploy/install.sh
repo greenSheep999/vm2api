@@ -381,9 +381,27 @@ ensure_env() {
   fi
   chmod 600 "$envf" || true
   env_set_if_empty VM2API_ADMIN_USER "$DEFAULT_ADMIN_USER" || true
-  if env_set_if_empty VM2API_ADMIN_PASSWORD "$DEFAULT_ADMIN_PASSWORD"; then
-    WROTE_DEFAULT_PASSWORD=1
-    ok "已补默认管理台账密  ${DEFAULT_ADMIN_USER} / ${DEFAULT_ADMIN_PASSWORD}（只填空，已有密码未改）"
+  # 密码来源优先级：VM2API_ADMIN_PASSWORD / KIN_ADMIN_PASSWORD 环境变量 > 内置默认值。
+  # 此前这里直接用内置默认值，环境变量被静默忽略；而默认值 "123456" 只有 6 位，
+  # 会被面板 bootstrap 校验拒绝，导致控制台没有任何可用管理员账号。
+  local admin_pw="${VM2API_ADMIN_PASSWORD:-${KIN_ADMIN_PASSWORD:-}}"
+  local admin_pw_from_env=0
+  if [ -n "$admin_pw" ]; then
+    admin_pw_from_env=1
+  else
+    admin_pw="$DEFAULT_ADMIN_PASSWORD"
+  fi
+  if [ "${#admin_pw}" -lt 8 ]; then
+    err "管理台密码至少 8 位（当前 ${#admin_pw} 位）。请设置 VM2API_ADMIN_PASSWORD 后重试。"
+    exit 1
+  fi
+  if env_set_if_empty VM2API_ADMIN_PASSWORD "$admin_pw"; then
+    if [ "$admin_pw_from_env" = 1 ]; then
+      ok "已写入环境变量提供的管理台密码（用户 ${DEFAULT_ADMIN_USER}）"
+    else
+      WROTE_DEFAULT_PASSWORD=1
+      ok "已补默认管理台账密  ${DEFAULT_ADMIN_USER} / ${DEFAULT_ADMIN_PASSWORD}（只填空，已有密码未改）"
+    fi
   else
     info "保留已有管理台密码"
   fi

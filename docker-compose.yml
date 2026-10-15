@@ -27,7 +27,10 @@ services:
       # 自省容器名；VM2API_HOST_ROOT 可显式覆盖宿主安装目录。
       VM2API_CONTAINER_NAME: ${VM2API_CONTAINER_NAME:-vm2api}
       VM2API_HOST_ROOT: ${VM2API_HOST_ROOT:-}
-      HOST: 0.0.0.0
+      # 监听地址可由 .env 覆盖（默认 0.0.0.0 保持兼容）。
+      # 面板「入站」安全建议要求只监听 127.0.0.1 并走反代；此前这里写死 0.0.0.0，
+      # 导致 .env 里的 HOST=127.0.0.1 被静默忽略，建议无法照做。
+      HOST: ${HOST:-0.0.0.0}
       PORT: ${PORT:-8787}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
