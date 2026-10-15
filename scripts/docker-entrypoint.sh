@@ -133,10 +133,14 @@ if [ -z "${VM2API_ADMIN_USER:-}" ]; then
   env_upsert_if_empty VM2API_ADMIN_USER admin "$ENVF"
 fi
 if [ -z "${VM2API_ADMIN_PASSWORD:-}" ]; then
-  VM2API_ADMIN_PASSWORD=123456
+  # 不再回落到 6 位的 "123456"：面板 bootstrap 要求至少 8 位，
+  # 过短会让控制台没有任何可用管理员账号（日志只留一行 bootstrap failed）。
+  VM2API_ADMIN_PASSWORD="$(rand_hex)"
   export VM2API_ADMIN_PASSWORD
-  env_upsert_if_empty VM2API_ADMIN_PASSWORD 123456 "$ENVF"
-  echo "vm2api: VM2API_ADMIN_PASSWORD was empty; using default admin / 123456 (change after login)." >&2
+  env_upsert_if_empty VM2API_ADMIN_PASSWORD "$VM2API_ADMIN_PASSWORD" "$ENVF"
+  echo "vm2api: VM2API_ADMIN_PASSWORD was empty; generated a random admin password:" >&2
+  echo "vm2api:   ${VM2API_ADMIN_PASSWORD}" >&2
+  echo "vm2api: change it after the first login." >&2
 fi
 if [ -z "${VM2API_API_KEY:-}" ] && [ -z "${KIN_API_KEY:-}" ]; then
   VM2API_API_KEY="$(rand_hex)"
