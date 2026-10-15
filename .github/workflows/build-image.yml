@@ -1,0 +1,71 @@
+# 自建控制面镜像：只构建 linux/amd64，推送到本仓库 owner 的 ghcr。
+#
+# 为什么不用上游的 release.yml：
+#   - 上游要同时出 amd64 / arm64 单架构镜像 + manifest list + 二进制 Release 附件，
+#     依赖 GitHub Release 写入权限和 ARM64 runner；我们只需要 amd64 控制面。
+#   - payload.json 指向的是上游公开 Release（闭源 kernel / cli-node 等），
+#     由 Dockerfile 内的 fetch-payload 阶段按 sha256 校验下载，无需额外凭据。
+#
+# tag 约定与 deploy/install.sh 的 image_tag_for() 对齐：
+#   amd64 宿主期望无后缀 tag（如 v1.3.172）；这里始终按 VERSION 打 tag。
+name: build-image
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: build-image-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image-amd64:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: resolve image reference
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          owner=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
+          ver=$(tr -d '[:space:]' < VERSION)
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            ref="${GITHUB_REF_NAME}"
+          else
+            ref="v${ver}"
+          fi
+          echo "image=ghcr.io/${owner}/vm2api" >> "$GITHUB_OUTPUT"
+          echo "ref=${ref}" >> "$GITHUB_OUTPUT"
+          echo "version=${ver}" >> "$GITHUB_OUTPUT"
+          echo "building ${owner}/vm2api:${ref} (VERSION=${ver})"
+
+      - name: build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          provenance: false
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.ref }}
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.version }}
+            ${{ steps.meta.outputs.image }}:latest
+          cache-from: type=gha,scope=vm2api
+          cache-to: type=gha,scope=vm2api,mode=max
