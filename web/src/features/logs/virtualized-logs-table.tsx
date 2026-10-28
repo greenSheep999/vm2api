@@ -20,6 +20,31 @@ import {
 } from '@/components/ui/tooltip'
 import type { LogsTableColumn } from './column-visibility'
 
+/**
+ * 缓存命中率（%）：缓存读 ÷（新 input + 缓存读 + 缓存写）。
+ * 任一分量为 0 或缺省时返回 null，不臆造数字。
+ */
+function cacheHitRate(row: {
+  inputTokens: number | null
+  cacheReadInputTokens: number | null
+  cacheCreationInputTokens: number | null
+}): number | null {
+  const read = Number(row.cacheReadInputTokens) || 0
+  const fresh = Number(row.inputTokens) || 0
+  const write = Number(row.cacheCreationInputTokens) || 0
+  const total = read + fresh + write
+  if (!read || total <= 0) return null
+  return Math.round((1000 * read) / total) / 10
+}
+
+/** 命中率提示色：>= 80% 绿 / 40-80% 黄 / < 40% 红。 */
+function hitRateToneClass(rate: number | null): string {
+  if (rate == null) return 'text-muted-foreground'
+  if (rate >= 80) return 'text-green-600 dark:text-green-400'
+  if (rate >= 40) return 'text-yellow-600 dark:text-yellow-400'
+  return 'text-red-600 dark:text-red-400'
+}
+
 /** TTFT 提示色：< 5s 绿 / 5-15s 黄 / > 15s 红。 */
 function ttftToneClass(ms: number): string {
   if (ms < 5000) return 'text-green-600 dark:text-green-400'
@@ -125,6 +150,7 @@ function LogRow({
   onOpenDetail: OpenDetail
 }) {
   const nonBilling = isNonBillingEndpoint(row.endpoint)
+  const hits = cacheHitRate(row)
   const cache = cacheWriteSplit({
     total: row.cacheCreationInputTokens,
     fiveM: row.cacheCreation5mInputTokens,
@@ -271,6 +297,11 @@ function LogRow({
                 <span className='text-muted-foreground'>
                   {formatTokenAmount(row.cacheReadInputTokens)}
                 </span>
+                {hits != null ? (
+                  <span className={`text-[10px] ${hitRateToneClass(hits)}`}>
+                    命中 {hits}%
+                  </span>
+                ) : null}
               </div>
             </TooltipTrigger>
             <TooltipContent align='end' className='space-y-1 text-xs'>
@@ -280,6 +311,14 @@ function LogRow({
               <div className='mt-1 font-medium'>缓存读取</div>
               <div className='pl-2'>
                 {formatTokenAmount(row.cacheReadInputTokens)}
+              </div>
+              <div className='mt-1 font-medium'>命中率</div>
+              <div className='pl-2'>
+                {hits != null ? `${hits}%（缓存读 ÷ 总输入）` : '无缓存读'}
+              </div>
+              <div className='mt-1 font-medium'>全价 input</div>
+              <div className='pl-2'>
+                {formatTokenAmount(row.inputTokens)}（未命中部分，按原价计费）
               </div>
             </TooltipContent>
           </Tooltip>
