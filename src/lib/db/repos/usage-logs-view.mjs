@@ -481,7 +481,14 @@ export class UsageLogsView {
       userIds: rows.map((r) => r.user_id),
       keyIds: rows.map((r) => r.api_key_id),
       vmIds: [...rows.map((r) => r.vm_id), ...attempts.map((a) => a.vm_id)],
-      accountIds: [...rows.map((r) => r.final_account_id || r.account_id), ...attempts.map((a) => a.account_id)],
+      // codex 槽位与账号 1:1（accounts.id == vm.id）：历史行没有 account_id，
+      // 这里把 vm_id 也当候选账号 id 一起查，否则 accounts map 是空的，
+      // 「供应商」只能回退显示槽位名，跟「槽位」列重复。
+      accountIds: [
+        ...rows.map((r) => r.vm_id),
+        ...rows.map((r) => r.final_account_id || r.account_id),
+        ...attempts.map((a) => a.account_id),
+      ],
     })
     const chains = new Map()
     for (const a of attempts) {
