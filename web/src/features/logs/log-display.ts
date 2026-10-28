@@ -185,6 +185,32 @@ export type ModelAuditDisplay = {
   hasActualMismatch: boolean
   secondaryActualModel: string | null
   effectiveRequestModel: string | null
+  /** 实际发给上游的模型（重定向后的出站值）。 */
+  sentUpstreamModel: string | null
+  /** 上游实际回包的模型。 */
+  upstreamResponseModel: string | null
+  /** 上游回包与发出去的不是同一个模型 = 真降级。 */
+  downgraded: boolean
+  /** 只是同族变体（日期后缀 / -latest 等），不算降级。 */
+  variantOnly: boolean
+}
+
+/**
+ * 抹平模型名里不影响语义的差异，用来区分「降级」和「同族变体」：
+ * `gpt-6-astra-20260801` / `gpt-6-astra-latest` 与 `gpt-6-astra` 视为同一模型。
+ */
+export function normalizeModelVariant(model: string | null | undefined): string {
+  return String(model || '')
+    .split('/')
+    .filter(Boolean)
+    .pop()!
+    .toLowerCase()
+    .replace(/\[1m\]$/, '')
+    .replace(/[-_.](latest|preview|exp)$/, '')
+    .replace(/[-_.]?\d{8}$/, '')
+    .replace(/[-_.]?\d{4}-\d{2}-\d{2}$/, '')
+    .replace(/[-_.]\d{4}$/, '')
+    .trim()
 }
 
 /**
@@ -195,21 +221,36 @@ export function resolveModelAuditDisplay(row: {
   originalModel: string | null
   model: string | null
   actualResponseModel: string | null
+  upstreamResponseModel?: string | null
 }): ModelAuditDisplay {
   const effectiveRequestModel = row.model ?? row.originalModel
-  const hasActualMismatch = Boolean(
-    row.actualResponseModel &&
-    effectiveRequestModel &&
-    row.actualResponseModel !== effectiveRequestModel
+  // actualResponseModel(历史命名) = 发给上游的模型。
+  const sentUpstreamModel = row.actualResponseModel ?? effectiveRequestModel
+  const upstreamResponseModel = row.upstreamResponseModel ?? null
+  // 有 really-returned 模型时，比较「发出去的 vs 回回来的」；
+  // 历史行为没有这一列，退回比较「生效请求模型 vs 发送模型」。
+  const comparedTo = upstreamResponseModel
+    ? sentUpstreamModel
+    : effectiveRequestModel
+  const comparedWith = upstreamResponseModel ?? row.actualResponseModel
+  const rawDiff = Boolean(
+    comparedTo && comparedWith && comparedTo !== comparedWith
   )
+  const downgraded =
+    rawDiff &&
+    normalizeModelVariant(comparedTo) !== normalizeModelVariant(comparedWith)
   return {
     primaryBillingModel: effectiveRequestModel,
     hasRedirect: Boolean(
       row.originalModel && row.model && row.originalModel !== row.model
     ),
-    hasActualMismatch,
-    secondaryActualModel: hasActualMismatch ? row.actualResponseModel : null,
+    hasActualMismatch: rawDiff,
+    secondaryActualModel: rawDiff ? comparedWith : null,
     effectiveRequestModel,
+    sentUpstreamModel,
+    upstreamResponseModel,
+    downgraded,
+    variantOnly: rawDiff && !downgraded,
   }
 }
 
@@ -297,6 +338,25 @@ export function chainItemName(item: ProviderChainItem): string {
   return item.vmName || item.vmId || item.providerName || '未知'
 }
 
+/**
+ * 「供应商」列的名字：**账号优先**。
+ *
+ * 这一列回答的是「哪个账号承接了这次请求」，所以账号名（邮箱）必须排在
+ * 槽位名前面；否则没有账号信息时会退化成槽位名，和「槽位」列完全重复。
+ */
+export function finalProviderName(row: UsageLogRow): string {
+  const last = finalChainItem(row.providerChain)
+  return (
+    last?.providerName ||
+    row.providerName ||
+    last?.vmName ||
+    last?.vmId ||
+    row.vmName ||
+    row.vmId ||
+    '未知'
+  )
+}
+
 /** 重试次数 = 尝试数 - 1（每条 request_attempts 都是真实上游请求）。 */
 export function retryCount(chain: readonly ProviderChainItem[]): number {
   return Math.max(0, chain.length - 1)
@@ -310,13 +370,6 @@ export function finalChainItem(
     if (chain[i].downstreamCommitted) return chain[i]
   }
   return chain.length ? chain[chain.length - 1] : null
-}
-
-/** 行级供应商名：最终尝试 → 行上的槽位 / 账号 → 未知。 */
-export function finalProviderName(row: UsageLogRow): string {
-  const last = finalChainItem(row.providerChain)
-  if (last) return chainItemName(last)
-  return row.vmName || row.vmId || row.providerName || '未知'
 }
 
 /** 首次尝试的实测队列等待。历史总调度时间不能当作排队。 */

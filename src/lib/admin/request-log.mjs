@@ -570,7 +570,13 @@ export class RequestLogStore {
       web_search_requests: webSearch,
       requested_model: extra.requested_model || extra.model || null,
       upstream_model: extra.upstream_model || null,
-      model_mismatch: modelMismatch(extra.requested_model || extra.model, extra.upstream_model),
+      upstream_response_model: extra.upstream_response_model || null,
+      // 降级判定 = 「发出去的模型」vs「上游实际回的模型」。两者都缺一即 null（未知），
+      // 不能用 requested 与 upstream_model 相比——那两个通常相同，永远看不出降级。
+      model_mismatch: modelMismatch(
+        extra.upstream_model || extra.requested_model || extra.model,
+        extra.upstream_response_model,
+      ),
       first_token_ms: extra.first_token_ms ?? null,
       first_byte_ms: extra.first_byte_ms ?? null,
       generation_ms: extra.generation_ms ?? null,

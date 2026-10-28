@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import type { UsageLogFilters, UsageLogRow } from '@/types/panel-usage-logs'
-import { ArrowUp, Loader2 } from 'lucide-react'
+import { ArrowUp, Loader2, Wrench } from 'lucide-react'
 import {
   calculateOutputRate,
   formatCurrency,
@@ -120,11 +120,52 @@ function tpsToneClass(rate: number): string {
   if (rate >= 10) return 'text-yellow-600 dark:text-yellow-400'
   return 'text-red-600 dark:text-red-400'
 }
+
+/** 总耗时提示色：< 15s 绿 / 15-30s 黄 / >= 30s 红。 */
+function durationToneClass(ms: number | null): string {
+  if (ms == null || ms <= 0) return 'text-muted-foreground'
+  if (ms < 15000) return 'text-green-600 dark:text-green-400'
+  if (ms < 30000) return 'text-yellow-600 dark:text-yellow-400'
+  return 'text-red-600 dark:text-red-400'
+}
+
+/** 把文字提示色换成同色系的左侧竖条底色。 */
+function barOf(tone: string): string {
+  if (tone.includes('green')) return 'bg-green-500'
+  if (tone.includes('yellow')) return 'bg-yellow-500'
+  if (tone.includes('red')) return 'bg-red-500'
+  return 'bg-muted-foreground/30'
+}
+
+/** 性能列的一行：值(带单位) + 文字标签，整行右对齐；彩条由外层统一画成一条。 */
+function PerfRow({
+  label,
+  n,
+  u,
+  tone,
+}: {
+  label: string
+  n: string
+  u: string
+  tone: string
+}) {
+  return (
+    <div className='flex w-full items-center justify-end gap-1 leading-tight'>
+      <span className={cn('shrink-0 text-[10px] tabular-nums', tone)}>
+        {n}
+        <span className='text-muted-foreground'>{u}</span>
+      </span>
+      <span className='w-[34px] shrink-0 truncate text-left text-[10px] text-muted-foreground'>
+        {label}
+      </span>
+    </div>
+  )
+}
 import { CostTooltipContent } from './cost-tooltip'
+import { TipDivider, TipKV, TipNote, TipSection } from './tooltip-kit'
 import {
   ModelDisplayWithRedirect,
   StatusBadge,
-  ThinkingEffortDisplay,
 } from './log-cells'
 import { cacheWriteSplit, copyText, hasFastMode } from './log-display'
 import { ProviderCell } from './provider-chain-popover'
@@ -132,7 +173,7 @@ import { usageLogsBatchQueryOptions } from './queries'
 import { RelativeTime } from './relative-time'
 import { api } from '@/lib/api'
 
-const ROW_HEIGHT = 52
+const ROW_HEIGHT = 72
 const SCROLL_TOP_THRESHOLD = 500
 
 export type DetailTab = 'summary' | 'logic-trace' | 'performance' | 'raw'
@@ -143,11 +184,13 @@ export type OpenDetail = (
 ) => void
 
 const FAST_BADGE =
-  'text-[10px] leading-tight px-1 bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/30 dark:text-orange-300 dark:border-orange-800'
+  'text-[10px] leading-tight px-1 py-0 [&_svg]:size-2.5 bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/30 dark:text-orange-300 dark:border-orange-800'
 const CONTEXT_1M_BADGE =
-  'text-[10px] leading-tight px-1 bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/30 dark:text-purple-300 dark:border-purple-800'
+  'text-[10px] leading-tight px-1 py-0 [&_svg]:size-2.5 bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/30 dark:text-purple-300 dark:border-purple-800'
 const TTL_BADGE =
-  'text-[10px] leading-tight px-1 bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800'
+  'text-[10px] leading-tight px-1 py-0 [&_svg]:size-2.5 bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-800'
+const TOOLS_BADGE =
+  'gap-0.5 text-[10px] leading-tight px-1 py-0 [&_svg]:size-2.5 bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-800'
 
 function HeadCell({
   className,
@@ -165,41 +208,53 @@ function HeadCell({
   )
 }
 
+/** 长上下文档位的兜底阈值：总上下文（未命中输入 + 缓存读）超过 200K。 */
+const LONG_CONTEXT_CONTEXT_TOKENS = 200_000
+
+/** 长上下文：优先看计价档标记，没标记时按总上下文量兜底判断。 */
+function isLongContext(row: UsageLogRow): boolean {
+  if (row.context1mApplied) return true
+  const contextTokens =
+    (row.inputTokens || 0) + (row.cacheReadInputTokens || 0)
+  return contextTokens >= LONG_CONTEXT_CONTEXT_TOKENS
+}
+
 function CostBadges({ row }: { row: UsageLogRow }) {
   const fast = hasFastMode(row)
-  const context1m = Boolean(row.context1mApplied)
-  if (fast && context1m) {
-    return (
-      <Badge
-        variant='outline'
-        className='gap-0 px-0.5 text-[9px] leading-3'
-        title='fast + 1M 上下文'
-      >
-        <span className='text-orange-700 dark:text-orange-300'>fast</span>
-        <span className='text-muted-foreground'>·</span>
-        <span className='text-purple-700 dark:text-purple-300'>1M</span>
-      </Badge>
-    )
-  }
-  if (fast) {
-    return (
-      <Badge
-        variant='outline'
-        className={FAST_BADGE}
-        title='优先服务等级（fast 模式）'
-      >
-        fast
-      </Badge>
-    )
-  }
-  if (context1m) {
-    return (
-      <Badge variant='outline' className={CONTEXT_1M_BADGE}>
-        1M
-      </Badge>
-    )
-  }
-  return null
+  const longContext = isLongContext(row)
+  const tools = Boolean(row.hasTools)
+  if (!fast && !longContext && !tools) return null
+  return (
+    <>
+      {fast ? (
+        <Badge
+          variant='outline'
+          className={FAST_BADGE}
+          title='优先服务等级（fast 模式）'
+        >
+          fast
+        </Badge>
+      ) : null}
+      {longContext ? (
+        <Badge
+          variant='outline'
+          className={CONTEXT_1M_BADGE}
+          title='长上下文：本次请求上下文超过 200K，按长上下文档位计价'
+        >
+          Long context
+        </Badge>
+      ) : null}
+      {tools ? (
+        <Badge
+          variant='outline'
+          className={TOOLS_BADGE}
+          title='携带工具调用；联网搜索 / 图片生成这类计费工具会单独计入成本'
+        >
+          <Wrench className='h-2.5 w-2.5' />+
+        </Badge>
+      ) : null}
+    </>
+  )
 }
 
 function LogRow({
@@ -352,11 +407,6 @@ function LogRow({
           </TooltipContent>
         </Tooltip>
       </div>
-      {hidden('reasoningEffort') ? null : (
-        <div className='relative z-20 min-w-[64px] flex-[0.6] overflow-visible px-1.5 font-mono text-xs'>
-          <ThinkingEffortDisplay effort={row.reasoningEffort} />
-        </div>
-      )}
       {hidden('tokens') ? null : (
         <div className='min-w-[70px] flex-[0.7] px-1.5 text-right font-mono text-xs'>
           <Tooltip delayDuration={250}>
@@ -368,9 +418,18 @@ function LogRow({
                 </span>
               </div>
             </TooltipTrigger>
-            <TooltipContent align='end' className='space-y-1 text-xs'>
-              <div>输入: {formatTokenAmount(row.inputTokens)}</div>
-              <div>输出: {formatTokenAmount(row.outputTokens)}</div>
+            <TooltipContent align='end' className='w-[186px] space-y-1'>
+              <TipKV label='输入' value={formatTokenAmount(row.inputTokens)} />
+              <TipKV label='输出' value={formatTokenAmount(row.outputTokens)} />
+              <TipKV
+                label='缓存读取'
+                value={formatTokenAmount(row.cacheReadInputTokens)}
+              />
+              <TipDivider />
+              <TipKV
+                label='总 tokens'
+                value={formatTokenAmount(row.totalTokens)}
+              />
             </TooltipContent>
           </Tooltip>
         </div>
@@ -403,48 +462,63 @@ function LogRow({
                 ) : null}
               </div>
             </TooltipTrigger>
-            <TooltipContent align='end' className='space-y-1 text-xs'>
-              <div className='font-medium'>缓存写入</div>
-              <div className='pl-2'>5m: {formatTokenAmount(cache.fiveM)}</div>
-              <div className='pl-2'>1h: {formatTokenAmount(cache.oneH)}</div>
-              <div className='mt-1 font-medium'>缓存读取</div>
-              <div className='pl-2'>
-                {formatTokenAmount(row.cacheReadInputTokens)}
-              </div>
-              <div className='mt-1 font-medium'>命中率</div>
-              <div className='pl-2'>
-                {hits != null ? `${hits}%（缓存读 ÷ 总输入）` : '无缓存读'}
-              </div>
-              <div className='mt-1 font-medium'>全价 input</div>
-              <div className='pl-2'>
-                {formatTokenAmount(row.inputTokens)}（未命中部分，按原价计费）
-              </div>
+            <TooltipContent align='end' className='w-[210px] space-y-1'>
+              <TipSection>缓存写入</TipSection>
+              <TipKV label='5m' value={formatTokenAmount(cache.fiveM)} />
+              <TipKV label='1h' value={formatTokenAmount(cache.oneH)} />
+              <TipDivider />
+              <TipSection>缓存读取</TipSection>
+              <TipKV
+                label='读命中'
+                value={formatTokenAmount(row.cacheReadInputTokens)}
+              />
+              <TipKV
+                label='命中率'
+                value={hits != null ? `${hits}%` : '无缓存读'}
+                tone={hitRateToneClass(hits)}
+              />
+              <TipKV
+                label='全价输入'
+                value={formatTokenAmount(row.inputTokens)}
+              />
+              <TipNote>全价输入 = 未命中部分，按原价计费。</TipNote>
             </TooltipContent>
           </Tooltip>
         </div>
       )}
       {hidden('cost') ? null : (
-        <div className='min-w-[50px] flex-[0.6] px-1.5 text-right font-mono text-xs'>
+        <div className='min-w-[96px] flex-[0.9] px-1.5 text-right font-mono text-xs'>
           {nonBilling || row.costUsd == null ? (
             '-'
           ) : (
             <Tooltip delayDuration={250}>
               <TooltipTrigger asChild>
-                <span className='inline-flex cursor-help items-center gap-1'>
-                  {(() => {
-                    const c = splitCurrency(
-                      formatCurrency(row.actualCostUsd ?? row.costUsd, 6),
-                    )
-                    return (
-                      <>
-                        <span className='text-muted-foreground'>{c.sym}</span>
-                        <span className='text-green-600 dark:text-green-400'>
-                          {c.n}
-                        </span>
-                      </>
-                    )
-                  })()}
-                  <CostBadges row={row} />
+                <span className='flex cursor-help flex-col items-end gap-0.5 leading-tight'>
+                  <span className='inline-flex items-baseline gap-0.5'>
+                    {(() => {
+                      const c = splitCurrency(
+                        formatCurrency(row.costUsd, 6),
+                      )
+                      return (
+                        <>
+                          <span className='text-muted-foreground'>{c.sym}</span>
+                          <span className='text-green-600 dark:text-green-400'>
+                            {c.n}
+                          </span>
+                        </>
+                      )
+                    })()}
+                  </span>
+                  {row.actualCostUsd != null &&
+                  row.costUsd != null &&
+                  Math.abs(row.actualCostUsd - row.costUsd) > 5e-7 ? (
+                    <span className='text-[10px] text-orange-600 dark:text-orange-400'>
+                      A {formatCurrency(row.actualCostUsd, 6)}
+                    </span>
+                  ) : null}
+                  <span className='flex flex-wrap items-center justify-end gap-1'>
+                    <CostBadges row={row} />
+                  </span>
                 </span>
               </TooltipTrigger>
               <TooltipContent align='end' className='max-w-[320px] p-3'>
@@ -455,49 +529,124 @@ function LogRow({
         </div>
       )}
       {hidden('performance') ? null : (
-        <div className='min-w-[80px] flex-[0.8] px-1.5 text-right font-mono text-xs'>
+        <div className='min-w-[104px] flex-[1] px-1.5 font-mono text-xs'>
           <Tooltip delayDuration={250}>
             <TooltipTrigger asChild>
-              <div className='flex cursor-help flex-col items-end'>
-                <span>
-                  <span>{splitDuration(row.durationMs).n}</span>
-                  <span className='text-muted-foreground'>
-                    {splitDuration(row.durationMs).u}
-                  </span>
-                </span>
-                {row.ttftMs != null && row.ttftMs > 0 ? (
-                  <span className='text-[10px]'>
-                    <span className='text-muted-foreground'>TTFT </span>
-                    <span className={ttftToneClass(row.ttftMs)}>
-                      {splitDuration(row.ttftMs).n}
-                    </span>
-                    <span className='text-muted-foreground'>
-                      {splitDuration(row.ttftMs).u}
-                    </span>
-                  </span>
-                ) : null}
-                {showRate ? (
-                  <span className='text-[10px]'>
-                    <span className={tpsToneClass(rate)}>{rate.toFixed(0)}</span>
-                    <span className='text-muted-foreground'> tok/s</span>
-                  </span>
-                ) : null}
+              <div className='flex cursor-help items-stretch gap-1.5'>
+                <div className='flex min-w-0 flex-1 flex-col gap-y-1'>
+                  <PerfRow
+                    label='TTFT'
+                    n={
+                      row.ttftMs != null && row.ttftMs > 0
+                        ? splitDuration(row.ttftMs).n
+                        : '—'
+                    }
+                    u={
+                      row.ttftMs != null && row.ttftMs > 0
+                        ? splitDuration(row.ttftMs).u
+                        : ''
+                    }
+                    tone={
+                      row.ttftMs != null && row.ttftMs > 0
+                        ? ttftToneClass(row.ttftMs)
+                        : 'text-muted-foreground'
+                    }
+                  />
+                  <PerfRow
+                    label='Total'
+                    n={
+                      row.durationMs != null
+                        ? splitDuration(row.durationMs).n
+                        : '—'
+                    }
+                    u={
+                      row.durationMs != null
+                        ? splitDuration(row.durationMs).u
+                        : ''
+                    }
+                    tone={durationToneClass(row.durationMs)}
+                  />
+                  <PerfRow
+                    label='tok/s'
+                    n={showRate ? rate.toFixed(0) : '—'}
+                    u={showRate ? ' t/s' : ''}
+                    tone={
+                      showRate ? tpsToneClass(rate) : 'text-muted-foreground'
+                    }
+                  />
+                </div>
+                {/* 一条竖条，三段紧贴：TTFT / Total / tok/s 各按自己的健康度上色。 */}
+                <div className='flex w-[3px] shrink-0 flex-col overflow-hidden rounded-full'>
+                  <span
+                    className={cn(
+                      'flex-1',
+                      barOf(
+                        row.ttftMs != null && row.ttftMs > 0
+                          ? ttftToneClass(row.ttftMs)
+                          : 'text-muted-foreground',
+                      ),
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      'flex-1',
+                      barOf(durationToneClass(row.durationMs)),
+                    )}
+                  />
+                  <span
+                    className={cn(
+                      'flex-1',
+                      barOf(
+                        showRate
+                          ? tpsToneClass(rate)
+                          : 'text-muted-foreground',
+                      ),
+                    )}
+                  />
+                </div>
               </div>
             </TooltipTrigger>
-            <TooltipContent align='end' className='space-y-1 text-xs'>
-              <div>总耗时: {formatDuration(row.durationMs)}</div>
+            <TooltipContent align='end' className='w-[214px] space-y-1'>
+              <TipKV
+                label='总耗时'
+                value={formatDuration(row.durationMs)}
+                tone={durationToneClass(row.durationMs)}
+              />
               {row.firstByteMs != null ? (
-                <div>首字节时间（TTFB）: {formatDuration(row.firstByteMs)}</div>
+                <TipKV
+                  label='首字节 TTFB'
+                  value={formatDuration(row.firstByteMs)}
+                />
               ) : null}
               {row.ttftMs != null ? (
-                <div>首 Token 时间（TTFT）: {formatDuration(row.ttftMs)}</div>
+                <TipKV
+                  label='首 Token TTFT'
+                  value={formatDuration(row.ttftMs)}
+                  tone={ttftToneClass(row.ttftMs)}
+                />
               ) : null}
               {row.generationMs != null && row.generationMs > 0 ? (
-                <div>
-                  上游输出时间（含推理）: {formatDuration(row.generationMs)}
-                </div>
+                <TipKV
+                  label='上游输出'
+                  value={formatDuration(row.generationMs)}
+                />
               ) : null}
-              {showRate ? <div>输出速率: {rate.toFixed(1)} tok/s</div> : null}
+              <TipDivider />
+              {showRate ? (
+                <TipKV
+                  label='输出速率'
+                  value={`${rate.toFixed(1)} tok/s`}
+                  tone={tpsToneClass(rate)}
+                />
+              ) : null}
+              {hits != null ? (
+                <TipKV
+                  label='缓存命中率'
+                  value={`${hits}%`}
+                  tone={hitRateToneClass(hits)}
+                />
+              ) : null}
+              <TipNote>上游输出含不可见推理，不含 HTTP 收尾与清理。</TipNote>
             </TooltipContent>
           </Tooltip>
         </div>
@@ -668,14 +817,6 @@ export function VirtualizedLogsTable({
                 <HeadCell className='min-w-[100px] flex-[1.5]'>供应商</HeadCell>
               )}
               <HeadCell className='min-w-[100px] flex-[1.3]'>计费模型</HeadCell>
-              {isHidden('reasoningEffort') ? null : (
-                <HeadCell
-                  className='min-w-[64px] flex-[0.6]'
-                  title='该模型请求的思考强度'
-                >
-                  思考强度
-                </HeadCell>
-              )}
               {isHidden('tokens') ? null : (
                 <HeadCell className='min-w-[70px] flex-[0.7] text-right'>
                   Tokens
@@ -687,16 +828,16 @@ export function VirtualizedLogsTable({
                 </HeadCell>
               )}
               {isHidden('cost') ? null : (
-                <HeadCell className='min-w-[50px] flex-[0.6] text-right'>
+                <HeadCell className='min-w-[96px] flex-[0.9] text-right'>
                   成本
                 </HeadCell>
               )}
               {isHidden('performance') ? null : (
-                <HeadCell className='min-w-[80px] flex-[0.8] text-right'>
+                <HeadCell className='min-w-[104px] flex-[1] text-right'>
                   性能
                 </HeadCell>
               )}
-              <HeadCell className='min-w-[70px] flex-[0.7] pr-3 pl-1.5'>
+              <HeadCell className='min-w-[70px] flex-[0.7] pr-3 pl-1.5 text-right'>
                 状态
               </HeadCell>
             </div>
@@ -744,7 +885,7 @@ export function VirtualizedLogsTable({
                     role='button'
                     tabIndex={0}
                     className={cn(
-                      'flex cursor-pointer items-center border-b border-border/40 text-sm transition-colors outline-none hover:bg-accent/50 focus-visible:bg-accent/50',
+                      'flex cursor-pointer items-center overflow-hidden border-b border-border/40 text-sm transition-colors outline-none hover:bg-accent/50 focus-visible:bg-accent/50',
                       isNonBillingEndpoint(row.endpoint) &&
                         'bg-muted/30 text-muted-foreground dark:bg-muted/15'
                     )}

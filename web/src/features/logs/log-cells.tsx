@@ -30,7 +30,11 @@ export function StatusBadge({
   const badge = (
     <Badge
       variant='outline'
-      className={cn(statusBadgeClass(statusCode, finalState), className)}
+      className={cn(
+        'px-1.5 py-0 text-[10px] leading-tight tabular-nums [&_svg]:size-2.5',
+        statusBadgeClass(statusCode, finalState),
+        className
+      )}
     >
       {statusCode ?? '未知'}
     </Badge>
@@ -52,7 +56,7 @@ export function ThinkingEffortBadge({ effort }: { effort: string }) {
     <Badge
       variant='outline'
       className={cn(
-        'w-fit px-1 text-[10px] leading-tight whitespace-nowrap',
+        'w-fit px-1 py-0 text-[10px] leading-tight whitespace-nowrap [&_svg]:size-2.5',
         thinkingEffortBadgeClass(effort)
       )}
     >
@@ -121,17 +125,56 @@ export function ModelDisplayWithRedirect({
             <ArrowRight className='h-3 w-3' />
           </Badge>
         ) : null}
+        {/* 思考强度跟着模型走：单独一列对不齐，且它本来就是「用哪个档位跑这个模型」。 */}
+        {row.reasoningEffort ? (
+          <ThinkingEffortDisplay effort={row.reasoningEffort} />
+        ) : null}
       </div>
+      {audit.sentUpstreamModel && audit.sentUpstreamModel !== model ? (
+        <div className='flex min-w-0 items-center gap-1 truncate text-xs text-muted-foreground'>
+          <span className='shrink-0'>↳</span>
+          <span className='truncate'>{audit.sentUpstreamModel}</span>
+        </div>
+      ) : null}
       {audit.secondaryActualModel ? (
         <Tooltip>
           <TooltipTrigger asChild>
-            <div className='flex cursor-help items-center gap-1 truncate text-xs text-yellow-600 dark:text-yellow-400'>
-              <span className='shrink-0'>↳</span>
-              <span className='truncate font-medium'>{audit.secondaryActualModel}</span>
+            <div
+              className={cn(
+                'flex min-w-0 cursor-help items-center gap-1 truncate text-xs',
+                audit.downgraded
+                  ? 'text-orange-600 dark:text-orange-400'
+                  : 'text-amber-600 dark:text-amber-400'
+              )}
+            >
+              <span className='shrink-0'>↳ 上游响应:</span>
+              <span className='truncate font-medium'>
+                {audit.secondaryActualModel}
+              </span>
+              <Badge
+                variant='outline'
+                className={cn(
+                  'shrink-0 px-1 text-[10px]',
+                  audit.downgraded
+                    ? 'border-orange-300 text-orange-700 dark:border-orange-700 dark:text-orange-300'
+                    : 'border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300'
+                )}
+              >
+                {audit.downgraded ? '模型不一致' : '模型变体'}
+              </Badge>
             </div>
           </TooltipTrigger>
-          <TooltipContent className='max-w-xs'>
-            上游供应商实际返回的模型与请求的模型不一致。计费仍然基于请求模型。
+          <TooltipContent className='max-w-xs space-y-1 text-xs'>
+            <div className='font-medium'>
+              {audit.downgraded ? '上游降级' : '模型变体'}
+            </div>
+            <div>发往上游: {audit.sentUpstreamModel || '—'}</div>
+            <div>上游返回: {audit.upstreamResponseModel || '—'}</div>
+            <div className='text-muted-foreground'>
+              {audit.downgraded
+                ? '上游用别的模型回包，计费仍按发往上游的模型计算。'
+                : '仅名称变体（日期后缀等），视为同一模型。'}
+            </div>
           </TooltipContent>
         </Tooltip>
       ) : null}

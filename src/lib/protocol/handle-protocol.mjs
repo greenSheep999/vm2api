@@ -173,6 +173,29 @@ import { materializeRemoteImageSources } from './images.mjs'
 import { applyMinMaxTokens } from './min-max-tokens.mjs'
 import { detectWarmupIntercept, formatWarmupSse, warmupMockMessage } from './warmup-intercept.mjs'
 
+/**
+ * 从一帧上游 SSE 里取「上游实际回包的模型」。
+ *
+ * 三种上游格式都要吃得下：Anthropic `message_start.message.model`、
+ * Responses `response.model`、OpenAI chunk 顶层 `model`。
+ * 取不到就返回 null，绝不拿请求里的模型冒充。
+ */
+export function responseModelFromSseLine(line) {
+  if (typeof line !== 'string' || !line.includes('model')) return null
+  const at = line.indexOf('data:')
+  if (at < 0) return null
+  try {
+    const ev = JSON.parse(line.slice(at + 5).trim())
+    const model =
+      ev?.message?.model ??
+      ev?.response?.model ??
+      (typeof ev?.model === 'string' ? ev.model : null)
+    return typeof model === 'string' && model.trim() ? model.trim() : null
+  } catch {
+    return null
+  }
+}
+
 export function createHandleProtocol(deps) {
   const json = (...args) => deps.json(...args)
   const writeSSEHeaders = (...args) => deps.writeSSEHeaders(...args)
@@ -1168,6 +1191,8 @@ export function createHandleProtocol(deps) {
       logBag.upstream_status = result?.status ?? null
       logBag.usage = usageForLog(result?.usage || result?.body?.usage || null, { cacheTtl })
       logBag.upstream_model = result?.model || null
+      // 非流式：响应体里的 model 才是上游实际回的模型。
+      logBag.upstream_response_model = result?.body?.model || null
       // TTFT is generated content; the upstream window also includes hidden reasoning.
       logBag.first_token_ms = Number.isFinite(result?.firstTokenAt)
         ? Math.max(0, result.firstTokenAt - logCtx.t0)
@@ -1605,6 +1630,8 @@ export function createHandleProtocol(deps) {
             })
           if (anthropicKeepalive) activeAttemptCommit = onCommit
           keepalive.arm()
+          // 上游实际回包的模型（降级检测用）：与「我们发出去的模型」是两回事。
+          let streamedResponseModel = null
           try {
             return await dispatchStreamInference({
               exec: candidate.exec,
@@ -1633,6 +1660,10 @@ export function createHandleProtocol(deps) {
               },
               onEvent: async (line) => {
                 if (/response_headers/.test(String(line))) return
+                const responseModel = responseModelFromSseLine(line)
+                if (responseModel && !streamedResponseModel) {
+                  streamedResponseModel = responseModel
+                }
                 line = restoreToolNamesInSSELine(line, attemptMeta?.toolNames || {})
                 if (personaHideTokens) line = hidePersonaUsageInSseLine(line, personaHideTokens, cacheTtl)
                 keepalive.observeLine(line)
@@ -1700,6 +1731,10 @@ export function createHandleProtocol(deps) {
       requestedSpeed: wantsFastMode(ctx.body) ? 'fast' : null,
     })
     logBag.upstream_model = result?.body?.model || result?.model || null
+    // 流式取 SSE 里的 message/chunk model；非流式取响应体 model。
+    // 不拿 result.model 兜底——那可能就是我们自己发出去的值，会把降级洗成「一致」。
+    logBag.upstream_response_model =
+      streamedResponseModel || result?.body?.model || null
     // Kernel stream firstTokenAt is generated content; include admission/setup via t0.
     logBag.first_token_ms = Number.isFinite(result?.firstTokenAt)
       ? Math.max(0, result.firstTokenAt - logCtx.t0)

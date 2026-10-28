@@ -237,6 +237,44 @@ describe('display helpers', () => {
     expect(audit.hasRedirect).toBe(true)
     expect(audit.secondaryActualModel).toBe('claude-z')
   })
+
+  it('flags a real downgrade when the upstream returns another model', () => {
+    const audit = resolveModelAuditDisplay({
+      originalModel: 'gpt-5.6-sol',
+      model: 'gpt-5.6-sol',
+      actualResponseModel: 'gpt-5.6-sol',
+      upstreamResponseModel: 'gpt-6-astra',
+    })
+    expect(audit.sentUpstreamModel).toBe('gpt-5.6-sol')
+    expect(audit.upstreamResponseModel).toBe('gpt-6-astra')
+    expect(audit.hasActualMismatch).toBe(true)
+    expect(audit.downgraded).toBe(true)
+    expect(audit.variantOnly).toBe(false)
+    expect(audit.secondaryActualModel).toBe('gpt-6-astra')
+  })
+
+  it('treats a same-family dated suffix as a variant, not a downgrade', () => {
+    const audit = resolveModelAuditDisplay({
+      originalModel: 'gpt-6-astra',
+      model: 'gpt-6-astra',
+      actualResponseModel: 'gpt-6-astra',
+      upstreamResponseModel: 'gpt-6-astra-20260801',
+    })
+    expect(audit.hasActualMismatch).toBe(true)
+    expect(audit.downgraded).toBe(false)
+    expect(audit.variantOnly).toBe(true)
+  })
+
+  it('shows no second line when the upstream echoes the sent model', () => {
+    const audit = resolveModelAuditDisplay({
+      originalModel: 'gpt-6-astra',
+      model: 'gpt-6-astra',
+      actualResponseModel: 'gpt-6-astra',
+      upstreamResponseModel: 'gpt-6-astra',
+    })
+    expect(audit.hasActualMismatch).toBe(false)
+    expect(audit.secondaryActualModel).toBeNull()
+  })
 })
 
 describe('logs search', () => {

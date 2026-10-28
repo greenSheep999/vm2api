@@ -154,7 +154,12 @@ function blockedBy(row) {
 
 /** Raw `usage_logs` row (already `enrichLogRow`-ed) + batched names → `UsageLogRow`. */
 export function toUsageLogRow(row, names, chain = []) {
-  const accountId = row.final_account_id || row.account_id || null
+  // codex 槽位与账号 1:1（accounts.id == vm.id）：历史行的 account_id 是空的，
+  // 用 vm_id 反查已登记的账号补上，否则「供应商」会回退显示槽位名、与「槽位」列重复。
+  const accountId =
+    row.final_account_id ||
+    row.account_id ||
+    (row.vm_id && names.accounts?.has?.(row.vm_id) ? row.vm_id : null)
   const inputTokens = num(row.input_tokens)
   const outputTokens = num(row.output_tokens)
   const cacheCreation = nullableNum(row.cache_creation_tokens)
@@ -178,6 +183,8 @@ export function toUsageLogRow(row, names, chain = []) {
     model: row.model ?? null,
     originalModel: row.requested_model ?? null,
     actualResponseModel: row.upstream_model ?? null,
+    /** 上游实际回包的模型：与 actualResponseModel（发出去的）不同即降级。 */
+    upstreamResponseModel: row.upstream_response_model ?? null,
     modelMismatch: row.model_mismatch == null ? null : Number(row.model_mismatch),
     endpoint: row.path ?? null,
     protocol: row.protocol ?? null,

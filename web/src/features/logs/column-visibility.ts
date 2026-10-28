@@ -6,7 +6,6 @@ export const LOGS_TABLE_COLUMNS = [
   { id: 'ip', label: 'IP' },
   { id: 'vm', label: '槽位' },
   { id: 'provider', label: '供应商' },
-  { id: 'reasoningEffort', label: '思考强度' },
   { id: 'tokens', label: 'Tokens' },
   { id: 'cache', label: '缓存' },
   { id: 'performance', label: '性能' },
@@ -15,7 +14,7 @@ export const LOGS_TABLE_COLUMNS = [
 
 export type LogsTableColumn = (typeof LOGS_TABLE_COLUMNS)[number]['id']
 
-export const DEFAULT_HIDDEN_COLUMNS: LogsTableColumn[] = ['ip']
+export const DEFAULT_HIDDEN_COLUMNS: LogsTableColumn[] = []
 
 const VALID: Record<string, true> = Object.fromEntries(
   LOGS_TABLE_COLUMNS.map((col) => [col.id, true])

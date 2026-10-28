@@ -350,6 +350,22 @@ export function serviceTierFromSseLine(line) {
   }
 }
 
+/** `response.model` from a Responses SSE data line = 上游实际回给人的模型。
+ *
+ * 这和「我们发出去的模型」是两件事：客户端请求 astra，网关也可能把 astra 原样发出去，
+ * 但上游自己降级成 luna 回包。只有这一项能与发出去的模型比对出真实降级。
+ */
+export function responseModelFromSseLine(line) {
+  if (typeof line !== 'string' || !line.startsWith('data:') || !line.includes('model')) return null
+  try {
+    const ev = JSON.parse(line.slice(5).trim())
+    const m = ev?.response?.model ?? ev?.model
+    return typeof m === 'string' && m.trim() ? m.trim() : null
+  } catch {
+    return null
+  }
+}
+
 /** Responses `usage` object from one SSE data line, if it carries token counts. */
 export function usageFromSseLine(line) {
   if (typeof line !== 'string' || !line.startsWith('data:') || !line.includes('usage')) return null
@@ -751,12 +767,16 @@ export async function handleCodexProtocol({
         }
         hops += 1
         logBag.vm_id = vm.id
+        // codex 槽位与账号 1:1（accounts.id == vm.id），不写这一项日志里就没有「供应商」，
+        // 前端只能回退显示槽位名，看起来和「槽位」列重复。
+        logBag.account_id = vm.id
         logBag.attempt_count = hops
         const chunks = []
         const nameSseEvent = createResponsesSseEventNamer()
         let responseServiceTier = null
         let streamedUsage = null
         let streamedImageUsage = null
+        let streamedResponseModel = null
         let conversionError = null
         const attemptStartedAt = Date.now()
         const sessionOptions = {
@@ -817,6 +837,8 @@ export async function handleCodexProtocol({
               if (seen) streamedUsage = mergeUsage(streamedUsage, seen)
               const imageGen = imageGenUsageFromSseLine(line)
               if (imageGen) streamedImageUsage = imageGen
+              const respModel = responseModelFromSseLine(line)
+              if (respModel && !streamedResponseModel) streamedResponseModel = respModel
               if (!stream) {
                 chunks.push(line)
                 return
@@ -910,12 +932,17 @@ export async function handleCodexProtocol({
           reportOpenAIAttempt(vm.id, 'succeeded', result.ttftMs ?? null)
           logBag.final_state = result?.ok ? result.terminalState || 'verified' : 'verified'
           logBag.upstream_model = converted.body.model
+          logBag.upstream_response_model =
+            streamedResponseModel || result?.body?.model || null
           if (hops > 1) logBag.codex_failed_over = true
           if (!stream) {
             let body
             try {
               const assembled = assembleCodexBodyFromSse(chunks, result.body || {})
               body = assembled
+              if (!logBag.upstream_response_model && assembled?.model) {
+                logBag.upstream_response_model = assembled.model
+              }
               if (protocol !== 'openai.responses') {
                 const message = codexBodyToAnthropicMessage(assembled, converted.body.model)
                 body =

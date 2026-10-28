@@ -10,8 +10,17 @@ import {
 } from './log-display'
 
 const LABEL = 'text-[11px] text-primary-foreground/70'
+const SUB = 'text-[10px] text-primary-foreground/60'
 const PURPLE =
   'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/30 dark:text-purple-300 dark:border-purple-800'
+
+/**
+ * 两列 grid：标签列定宽、值列右对齐。
+ *
+ * 之前每行是独立的 flex，标签宽度随文字变化，金额与单价两行右边缘对不齐，
+ * 计价模型这种长值还会把整行推歪。改成同一个 grid 后所有值共享一条右基线。
+ */
+const GRID = 'grid grid-cols-[74px_minmax(0,1fr)] items-baseline gap-x-3 gap-y-1'
 
 function CostRow({
   label,
@@ -24,13 +33,13 @@ function CostRow({
 }) {
   const unit = unitPricePerMillion(amount, tokens)
   return (
-    <div className='flex items-start justify-between gap-3'>
+    <>
       <span className={LABEL}>{label}</span>
       <div className='text-right font-mono tabular-nums'>
-        <div>{formatCurrency(amount, 6)}</div>
-        {unit ? <div className={LABEL}>@ ${unit} / 1M</div> : null}
+        <div className='text-[11px]'>{formatCurrency(amount, 6)}</div>
+        {unit ? <div className={SUB}>@ ${unit} / 1M</div> : null}
       </div>
-    </div>
+    </>
   )
 }
 
@@ -38,7 +47,7 @@ function TtlChip({ ttl }: { ttl: '5m' | '1h' }) {
   return (
     <Badge
       variant='outline'
-      className='ml-1 border-primary-foreground/30 px-1 text-[10px] leading-tight text-primary-foreground/80'
+      className='ml-1 border-primary-foreground/30 px-1 py-0 text-[10px] leading-tight [&_svg]:size-2.5 text-primary-foreground/80'
     >
       {ttl}
     </Badge>
@@ -70,20 +79,21 @@ export function CostTooltipContent({ row }: { row: UsageLogRow }) {
   )
 
   return (
-    <div className='space-y-3'>
+    <div className='space-y-2'>
       <div className='flex items-center justify-between gap-2'>
         <span className='text-xs font-semibold'>计费详情</span>
         {row.context1mApplied ? (
           <Badge
             variant='outline'
-            className={`shrink-0 px-1 text-[10px] leading-tight ${PURPLE}`}
+            className={`shrink-0 px-1 py-0 text-[10px] leading-tight [&_svg]:size-2.5 ${PURPLE}`}
           >
             1M 上下文
           </Badge>
         ) : null}
       </div>
+
       {breakdown ? (
-        <div className='space-y-2'>
+        <div className={GRID}>
           {(breakdown.input ?? 0) > 0 ? (
             <CostRow
               label='输入'
@@ -129,44 +139,47 @@ export function CostTooltipContent({ row }: { row: UsageLogRow }) {
               tokens={row.cacheReadInputTokens}
             />
           ) : null}
-          {multiplier != null && baseTotal != null ? (
-            <div className='flex items-center justify-between gap-3 border-t border-primary-foreground/20 pt-2'>
-              <span className={LABEL}>基础合计</span>
-              <span className='font-mono tabular-nums'>
-                {formatCurrency(baseTotal, 6)}
-              </span>
-            </div>
-          ) : null}
-          {multiplier != null ? (
-            <div className='space-y-2 rounded-md border border-primary-foreground/20 bg-primary-foreground/10 p-2'>
-              <div className='flex items-center justify-between text-[11px]'>
-                <span className='text-primary-foreground/70'>分组倍率</span>
-                <span className='font-mono'>x{multiplier.toFixed(2)}</span>
-              </div>
-            </div>
-          ) : null}
           {breakdown.pricingModel ? (
-            <div className='flex items-center justify-between gap-3'>
+            <>
               <span className={LABEL}>计价模型</span>
-              <span className='truncate font-mono text-[11px]'>
+              <span className='truncate text-right font-mono text-[11px]'>
                 {breakdown.pricingModel === 'unpriced'
                   ? '无价表'
                   : breakdown.pricingModel}
               </span>
-            </div>
+            </>
+          ) : null}
+          {multiplier != null ? (
+            <>
+              <span className={LABEL}>分组倍率</span>
+              <span className='text-right font-mono text-[11px]'>
+                x{multiplier.toFixed(2)}
+              </span>
+            </>
+          ) : null}
+          {multiplier != null && baseTotal != null ? (
+            <>
+              <span className={LABEL}>基础合计</span>
+              <span className='text-right font-mono text-[11px] tabular-nums'>
+                {formatCurrency(baseTotal, 6)}
+              </span>
+            </>
           ) : null}
         </div>
       ) : null}
-      <div className='flex items-end justify-between gap-3 border-t border-primary-foreground/20 pt-2'>
-        <span className={LABEL}>总费用</span>
-        <div className='text-right font-mono tabular-nums'>
-          {multiplier != null && baseTotal != null ? (
-            <div className='text-[11px] text-primary-foreground/60 line-through'>
-              {formatCurrency(baseTotal, 6)}
+
+      <div className='space-y-1 border-t border-primary-foreground/20 pt-2'>
+        <div className='flex items-baseline justify-between gap-3'>
+          <span className={LABEL}>总费用</span>
+          <div className='text-right font-mono tabular-nums'>
+            {multiplier != null && baseTotal != null ? (
+              <div className={`${SUB} line-through`}>
+                {formatCurrency(baseTotal, 6)}
+              </div>
+            ) : null}
+            <div className='text-sm font-semibold text-emerald-950 dark:text-emerald-100'>
+              {formatCurrency(total, 6)}
             </div>
-          ) : null}
-          <div className='text-sm font-semibold text-emerald-300 dark:text-emerald-700'>
-            {formatCurrency(total, 6)}
           </div>
         </div>
       </div>

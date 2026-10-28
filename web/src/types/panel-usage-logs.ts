@@ -112,6 +112,11 @@ export type UsageLogRow = {
   originalModel: string | null
   /** 上游回报的模型（`upstream_model`）。 */
   actualResponseModel: string | null
+  /**
+   * 上游实际回包的模型（`upstream_response_model`，来自 Responses SSE 的
+   * `response.model`）。与「发出去的模型」不同即为真实降级；null = 未采集到。
+   */
+  upstreamResponseModel: string | null
   /** 0 | 1 | null（null = 上游未声明模型）。 */
   modelMismatch: number | null
   /** 入站路径，例如 `/v1/messages`。 */

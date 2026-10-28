@@ -85,7 +85,7 @@ function SingleAttempt({
     <Tooltip delayDuration={300}>
       <TooltipTrigger asChild>
         <span className='flex min-w-0 cursor-help items-center gap-1'>
-          <span className='min-w-0 truncate'>{name}</span>
+          <span className='min-w-0 truncate text-[11px] text-muted-foreground'>{name}</span>
           {sticky ? (
             <Link2 className='h-3 w-3 shrink-0 text-violet-500' />
           ) : null}
@@ -164,8 +164,8 @@ export function ProviderChainPopover({
           aria-label={`${name} - ${chain.length}次`}
         >
           <span className='flex w-full min-w-0 items-center gap-1'>
-            <span className='min-w-0 truncate'>{name}</span>
-            <Badge variant='secondary' className='shrink-0 px-1 text-[10px]'>
+            <span className='min-w-0 truncate text-[11px] text-muted-foreground'>{name}</span>
+            <Badge variant='secondary' className='shrink-0 px-1 py-0 text-[10px] leading-tight [&_svg]:size-2.5'>
               {chain.length}次
             </Badge>
             <InfoIcon className='h-3 w-3 shrink-0 text-muted-foreground' />
