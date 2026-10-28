@@ -304,14 +304,14 @@ function LogRow({
           {row.vmName || row.vmId ? (
             <Tooltip delayDuration={250}>
               <TooltipTrigger asChild>
-                <span className='block truncate cursor-help'>
-                  {row.vmName || row.vmId}
+                <span className='flex min-w-0 cursor-help flex-col'>
+                  <span className='truncate'>{row.vmName || row.vmId}</span>
+                  {row.vmName && row.vmId && row.vmName !== row.vmId ? (
+                    <span className='truncate text-[10px] text-muted-foreground'>
+                      {row.vmId}
+                    </span>
+                  ) : null}
                 </span>
-                {row.vmName && row.vmId && row.vmName !== row.vmId ? (
-                  <span className='block truncate text-[10px] text-muted-foreground'>
-                    {row.vmId}
-                  </span>
-                ) : null}
               </TooltipTrigger>
               <TooltipContent align='end' className='space-y-1 text-xs'>
                 <div>槽位: {row.vmId || '—'}</div>

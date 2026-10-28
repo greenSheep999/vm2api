@@ -125,8 +125,9 @@ export function ModelDisplayWithRedirect({
       {audit.secondaryActualModel ? (
         <Tooltip>
           <TooltipTrigger asChild>
-            <div className='flex cursor-help items-center gap-1 truncate text-xs text-muted-foreground'>
-              ↳ {audit.secondaryActualModel}
+            <div className='flex cursor-help items-center gap-1 truncate text-xs text-yellow-600 dark:text-yellow-400'>
+              <span className='shrink-0'>↳</span>
+              <span className='truncate font-medium'>{audit.secondaryActualModel}</span>
             </div>
           </TooltipTrigger>
           <TooltipContent className='max-w-xs'>
