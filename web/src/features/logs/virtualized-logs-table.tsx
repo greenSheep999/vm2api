@@ -300,13 +300,18 @@ function LogRow({
         </div>
       )}
       {hidden('vm') ? null : (
-        <div className='min-w-[90px] flex-[0.9] truncate px-1.5 font-mono text-xs'>
+        <div className='min-w-[90px] flex-[0.9] px-1.5 font-mono text-xs'>
           {row.vmName || row.vmId ? (
             <Tooltip delayDuration={250}>
               <TooltipTrigger asChild>
-                <span className='cursor-help'>
+                <span className='block truncate cursor-help'>
                   {row.vmName || row.vmId}
                 </span>
+                {row.vmName && row.vmId && row.vmName !== row.vmId ? (
+                  <span className='block truncate text-[10px] text-muted-foreground'>
+                    {row.vmId}
+                  </span>
+                ) : null}
               </TooltipTrigger>
               <TooltipContent align='end' className='space-y-1 text-xs'>
                 <div>槽位: {row.vmId || '—'}</div>
@@ -382,15 +387,18 @@ function LogRow({
                     </Badge>
                   ) : null}
                   <span className='ml-auto'>
-                    {formatTokenAmount(row.cacheCreationInputTokens)}
+                    {row.cacheCreationInputTokens
+                      ? formatTokenAmount(row.cacheCreationInputTokens)
+                      : '—'}
                   </span>
                 </div>
                 <span className='text-muted-foreground'>
                   {formatTokenAmount(row.cacheReadInputTokens)}
                 </span>
                 {hits != null ? (
-                  <span className={`text-[10px] ${hitRateToneClass(hits)}`}>
-                    命中 {hits}%
+                  <span className='text-[10px]'>
+                    <span className='text-muted-foreground'>命中 </span>
+                    <span className={hitRateToneClass(hits)}>{hits}%</span>
                   </span>
                 ) : null}
               </div>
@@ -494,7 +502,7 @@ function LogRow({
           </Tooltip>
         </div>
       )}
-      <div className='min-w-[70px] flex-[0.7] truncate pr-3 pl-1.5'>
+      <div className='min-w-[70px] flex-[0.7] truncate pr-3 pl-1.5 text-right'>
         <Button
           type='button'
           variant='ghost'
