@@ -386,12 +386,17 @@ export function isCodexFailoverError(result) {
   if (status === 502 && /upstream_transport|worker_transport|transport/i.test(code)) return true
   // 500/502/504 before any downstream byte are replayable on another seat.
   // A request-shaped error is not: its code names the bad body, not the seat.
+  // 503 是上游「overloaded」的主要形态（server_is_overloaded / service_unavailable_error），
+  // 属于瞬时错误，换槽重试大概率能通过。此前只覆盖 500/502/504，503 全部直接失败。
   if (
-    (status === 500 || status === 502 || status === 504) &&
-    (code === '' || /server_error|provider_error|upstream_error|overloaded_error|internal_error/i.test(code))
+    (status === 500 || status === 502 || status === 503 || status === 504) &&
+    (code === '' ||
+      /server_error|provider_error|upstream_error|overloaded_error|server_is_overloaded|service_unavailable|internal_error/i.test(
+        code,
+      ))
   )
     return true
-  return /usage_limit_reached|upstream_auth|no_credential|sticky_unavailable/.test(code)
+  return /usage_limit_reached|upstream_auth|no_credential|sticky_unavailable|server_is_overloaded/i.test(code)
 }
 
 export function codexQuotaWindowReason(vm, now = Date.now()) {
