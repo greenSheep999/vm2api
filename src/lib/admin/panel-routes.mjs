@@ -5169,17 +5169,27 @@ export function createPanelHandler(ctx) {
         )
       }
 
-      // ===== 自动权重调度（策略存 data/auto-schedule.json，由外部执行器读取并应用）=====
+      // ===== 自动权重调度 =====
+      // 策略存 data/auto-schedule.json；外部执行器（vm2api-auto-weight.py）与本面板读同一份。
       const autoSchedPath = path.join(cfg.paths.project, 'data', 'auto-schedule.json')
       const AUTO_SCHED_DEFAULTS = {
         enabled: false,
         window_minutes: 60,
         min_samples: 8,
-        fast_ms: 8000,
+        // TTFT 分档
+        fast_ms: 10000,
         slow_ms: 20000,
         fast_weight: 20,
         mid_weight: 5,
         slow_weight: 1,
+        // 流量因子：窗口内请求数超过 traffic_cap 视为被压，降一档
+        use_traffic: true,
+        traffic_cap: 120,
+        // 额度因子：5h/7d 使用率超阈值降权
+        use_quota: true,
+        quota_warn_pct: 60,
+        quota_heavy_pct: 85,
+        // 防抖
         hysteresis: 3,
         cooldown_seconds: 600,
         interval_minutes: 10,
@@ -5198,7 +5208,56 @@ export function createPanelHandler(ctx) {
         fs.writeFileSync(autoSchedPath, JSON.stringify(next, null, 2))
         return next
       }
-      const autoSchedStats = (minutes) => {
+      // 读每槽的额度使用率（vm.codex.extra）
+      const autoSchedQuotaOf = (vm) => {
+        const extra = (vm && vm.codex && vm.codex.extra) || {}
+        const pick = (k) => {
+          const v = Number(extra[k])
+          return Number.isFinite(v) ? v : null
+        }
+        return {
+          used_5h: pick('codex_5h_used_percent') ?? pick('codex_primary_used_percent'),
+          used_7d: pick('codex_7d_used_percent') ?? pick('codex_secondary_used_percent'),
+        }
+      }
+      // 分档：TTFT → 基础档；流量超限降一档；额度超限直接压到最低
+      const autoSchedSuggest = (policy, row, quota) => {
+        let target
+        if (row.p50 < policy.fast_ms) target = policy.fast_weight
+        else if (row.p50 < policy.slow_ms) target = policy.mid_weight
+        else target = policy.slow_weight
+        const reasons = []
+        if (policy.use_traffic !== false && row.n > Number(policy.traffic_cap || 0)) {
+          const next =
+            target === policy.fast_weight
+              ? policy.mid_weight
+              : target === policy.mid_weight
+                ? policy.slow_weight
+                : policy.slow_weight
+          if (next !== target) reasons.push(`流量 ${row.n} > ${policy.traffic_cap}`)
+          target = next
+        }
+        const heavy = Math.max(
+          Number(quota.used_5h == null ? -1 : quota.used_5h),
+          Number(quota.used_7d == null ? -1 : quota.used_7d),
+        )
+        if (policy.use_quota !== false && heavy >= Number(policy.quota_heavy_pct || 100)) {
+          if (target !== policy.slow_weight) reasons.push(`额度 ${heavy}% ≥ ${policy.quota_heavy_pct}%`)
+          target = policy.slow_weight
+        } else if (policy.use_quota !== false && heavy >= Number(policy.quota_warn_pct || 100)) {
+          const next =
+            target === policy.fast_weight
+              ? policy.mid_weight
+              : target === policy.mid_weight
+                ? policy.slow_weight
+                : policy.slow_weight
+          if (next !== target) reasons.push(`额度 ${heavy}% ≥ ${policy.quota_warn_pct}%`)
+          target = next
+        }
+        return { target, reasons }
+      }
+      const autoSchedStats = (policy) => {
+        const minutes = Number(policy.window_minutes) || 60
         const db = getDb()
         const rows = db
           .prepare(
@@ -5210,10 +5269,28 @@ export function createPanelHandler(ctx) {
           if (!by.has(row.vm_id)) by.set(row.vm_id, [])
           by.get(row.vm_id).push(row.first_token_ms)
         }
+        const vms = listVms(cfg.paths.project)
+        const byId = new Map(vms.map((v) => [v.id, v]))
+        const total = rows.length || 1
         const out = []
         for (const [vm_id, vals] of by) {
           const sv = vals.slice().sort((a, b) => a - b)
-          out.push({ vm_id, n: vals.length, p50: sv[Math.floor(sv.length / 2)] })
+          const p50 = sv[Math.floor(sv.length / 2)]
+          const vm = byId.get(vm_id)
+          const quota = autoSchedQuotaOf(vm)
+          const row = {
+            vm_id,
+            n: vals.length,
+            p50,
+            traffic_pct: Math.round((1000 * vals.length) / total) / 10,
+            used_5h: quota.used_5h,
+            used_7d: quota.used_7d,
+            weight: vm ? Number(vm.policy?.weight ?? 1) || 1 : null,
+          }
+          const { target, reasons } = autoSchedSuggest(policy, row, quota)
+          row.suggested = target
+          row.reasons = reasons
+          out.push(row)
         }
         out.sort((a, b) => a.vm_id.localeCompare(b.vm_id))
         return out
@@ -5222,19 +5299,7 @@ export function createPanelHandler(ctx) {
       // GET /api/panel/auto-schedule
       if (req.method === 'GET' && p === '/api/panel/auto-schedule') {
         const policy = readAutoSchedPolicy()
-        const vms = listVms(cfg.paths.project)
-        const weights = new Map(vms.map((v) => [v.id, Number(v.policy?.weight ?? 1) || 1]))
-        return json(
-          res,
-          200,
-          panel.ok({
-            policy,
-            stats: autoSchedStats(policy.window_minutes).map((s) => ({
-              ...s,
-              weight: weights.get(s.vm_id) ?? null,
-            })),
-          }),
-        )
+        return json(res, 200, panel.ok({ policy, stats: autoSchedStats(policy) }))
       }
       // PUT /api/panel/auto-schedule
       if (req.method === 'PUT' && p === '/api/panel/auto-schedule') {
@@ -5248,6 +5313,9 @@ export function createPanelHandler(ctx) {
           fast_weight: [1, 100],
           mid_weight: [1, 100],
           slow_weight: [1, 100],
+          traffic_cap: [1, 100000],
+          quota_warn_pct: [1, 100],
+          quota_heavy_pct: [1, 100],
           hysteresis: [1, 20],
           cooldown_seconds: [0, 86400],
           interval_minutes: [1, 1440],
@@ -5258,17 +5326,33 @@ export function createPanelHandler(ctx) {
           if (!Number.isFinite(n)) continue
           patch[key] = Math.min(max, Math.max(min, n))
         }
-        if (typeof body?.enabled === 'boolean') patch.enabled = body.enabled
+        for (const key of ['enabled', 'use_traffic', 'use_quota']) {
+          if (typeof body?.[key] === 'boolean') patch[key] = body[key]
+        }
         return json(res, 200, panel.ok({ policy: writeAutoSchedPolicy(patch) }))
       }
-      // GET /api/panel/auto-schedule/stats
-      if (req.method === 'GET' && p === '/api/panel/auto-schedule/stats') {
+      // POST /api/panel/auto-schedule/run — 立即按建议权重热更新（不走外部执行器）
+      if (req.method === 'POST' && p === '/api/panel/auto-schedule/run') {
+        const body = await readBody(req, 8192).catch(() => ({}))
+        const dry = body?.dry === true
         const policy = readAutoSchedPolicy()
-        return json(
-          res,
-          200,
-          panel.ok({ window_minutes: policy.window_minutes, stats: autoSchedStats(policy.window_minutes) }),
-        )
+        const stats = autoSchedStats(policy)
+        const applied = []
+        for (const row of stats) {
+          if (row.n < Number(policy.min_samples || 1)) continue
+          if (row.weight == null || row.suggested == null) continue
+          if (row.weight === row.suggested) continue
+          const ratio =
+            Math.max(row.weight, row.suggested) / Math.max(1, Math.min(row.weight, row.suggested))
+          if (ratio < Number(policy.hysteresis || 1)) continue
+          if (!dry) {
+            patchVmRecord(cfg.paths.project, row.vm_id, (record) => ({
+              policy: { ...(record.policy || {}), weight: row.suggested },
+            }))
+          }
+          applied.push({ vm_id: row.vm_id, from: row.weight, to: row.suggested })
+        }
+        return json(res, 200, panel.ok({ dry, applied, count: applied.length }))
       }
 
       // GET /api/panel/routing
