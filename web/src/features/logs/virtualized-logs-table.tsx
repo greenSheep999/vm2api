@@ -436,54 +436,76 @@ function LogRow({
       )}
       {hidden('cache') ? null : (
         <div className='min-w-[70px] flex-[0.8] px-1.5 text-right font-mono text-xs'>
-          <Tooltip delayDuration={250}>
-            <TooltipTrigger asChild>
-              <div className='flex cursor-help flex-col items-end leading-tight tabular-nums'>
-                <div className='flex w-full items-center gap-1'>
-                  {row.cacheTtlApplied ? (
-                    <Badge variant='outline' className={TTL_BADGE}>
-                      {row.cacheTtlApplied}
-                    </Badge>
+          {(() => {
+            const hasWrite = (row.cacheCreationInputTokens ?? 0) > 0
+            const hasRead = (row.cacheReadInputTokens ?? 0) > 0
+            // 两者都没有 → 一个「—」就够，别渲染成「— / 0」看着像 -0。
+            if (!hasWrite && !hasRead) {
+              return <span className='text-muted-foreground'>—</span>
+            }
+            return (
+              <Tooltip delayDuration={250}>
+                <TooltipTrigger asChild>
+                  <div className='flex cursor-help flex-col items-end leading-tight tabular-nums'>
+                    {hasWrite ? (
+                      <div className='flex w-full items-center gap-1'>
+                        {row.cacheTtlApplied ? (
+                          <Badge variant='outline' className={TTL_BADGE}>
+                            {row.cacheTtlApplied}
+                          </Badge>
+                        ) : null}
+                        <span className='ml-auto'>
+                          {formatTokenAmount(row.cacheCreationInputTokens)}
+                        </span>
+                      </div>
+                    ) : null}
+                    {hasRead ? (
+                      <span className='text-muted-foreground'>
+                        {formatTokenAmount(row.cacheReadInputTokens)}
+                      </span>
+                    ) : null}
+                    {hits != null ? (
+                      <span className='text-[10px]'>
+                        <span className='text-muted-foreground'>命中 </span>
+                        <span className={hitRateToneClass(hits)}>{hits}%</span>
+                      </span>
+                    ) : null}
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent align='end' className='w-[210px] space-y-1'>
+                  {hasWrite ? (
+                    <>
+                      <TipSection>缓存写入</TipSection>
+                      <TipKV label='5m' value={formatTokenAmount(cache.fiveM)} />
+                      <TipKV label='1h' value={formatTokenAmount(cache.oneH)} />
+                      <TipDivider />
+                    </>
                   ) : null}
-                  <span className='ml-auto'>
-                    {row.cacheCreationInputTokens
-                      ? formatTokenAmount(row.cacheCreationInputTokens)
-                      : '—'}
-                  </span>
-                </div>
-                <span className='text-muted-foreground'>
-                  {formatTokenAmount(row.cacheReadInputTokens)}
-                </span>
-                {hits != null ? (
-                  <span className='text-[10px]'>
-                    <span className='text-muted-foreground'>命中 </span>
-                    <span className={hitRateToneClass(hits)}>{hits}%</span>
-                  </span>
-                ) : null}
-              </div>
-            </TooltipTrigger>
-            <TooltipContent align='end' className='w-[210px] space-y-1'>
-              <TipSection>缓存写入</TipSection>
-              <TipKV label='5m' value={formatTokenAmount(cache.fiveM)} />
-              <TipKV label='1h' value={formatTokenAmount(cache.oneH)} />
-              <TipDivider />
-              <TipSection>缓存读取</TipSection>
-              <TipKV
-                label='读命中'
-                value={formatTokenAmount(row.cacheReadInputTokens)}
-              />
-              <TipKV
-                label='命中率'
-                value={hits != null ? `${hits}%` : '无缓存读'}
-                tone={hitRateToneClass(hits)}
-              />
-              <TipKV
-                label='全价输入'
-                value={formatTokenAmount(row.inputTokens)}
-              />
-              <TipNote>全价输入 = 未命中部分，按原价计费。</TipNote>
-            </TooltipContent>
-          </Tooltip>
+                  <TipSection>缓存读取</TipSection>
+                  <TipKV
+                    label='读命中'
+                    value={formatTokenAmount(row.cacheReadInputTokens)}
+                  />
+                  <TipKV
+                    label='命中率'
+                    value={hits != null ? `${hits}%` : '无缓存读'}
+                    tone={hitRateToneClass(hits)}
+                  />
+                  <TipKV
+                    label='全价输入'
+                    value={formatTokenAmount(row.inputTokens)}
+                  />
+                  <TipNote>全价输入 = 未命中部分，按原价计费。</TipNote>
+                  {hasWrite ? null : (
+                    <TipNote>
+                      本链路是隐式缓存：上游只回「缓存命中读取」，不单独上报写入，
+                      所以没有 5m / 1h 写入量。
+                    </TipNote>
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            )
+          })()}
         </div>
       )}
       {hidden('cost') ? null : (

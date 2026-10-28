@@ -257,18 +257,20 @@ export function resolveModelAuditDisplay(row: {
 // ---------- 思考强度 ----------
 
 const THINKING_EFFORT_BADGE_STYLES: Record<string, string> = {
+  // 强度档不是错误状态，整条色阶走蓝→靛→紫，不用红。
+  // 红/玫红留给「失败、降级、超限」，避免把一个正常的 high 看成报警。
   none: 'border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-300',
   minimal:
     'border-stone-200 bg-stone-50 text-stone-700 dark:border-stone-700 dark:bg-stone-900/40 dark:text-stone-300',
   auto: 'border-sky-300 bg-gradient-to-r from-cyan-50 via-sky-50 to-indigo-50 text-sky-800 dark:border-sky-700 dark:from-cyan-950/40 dark:via-sky-950/40 dark:to-indigo-950/40 dark:text-sky-200',
   low: 'border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/40 dark:text-slate-300',
   medium:
-    'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-300',
-  high: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/30 dark:text-rose-300',
-  // xhigh 介于 high 与 max 之间，独立样式维持强度等级的视觉顺序。
+    'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-800 dark:bg-sky-950/30 dark:text-sky-300',
+  // Codex UI 的主蓝（system blue）——用户一眼认得，且不暗示错误。
+  high: 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-700 dark:bg-blue-950/40 dark:text-blue-300',
   xhigh:
-    'border-red-200 bg-red-50 text-red-700 dark:border-red-800 dark:bg-red-950/30 dark:text-red-300',
-  max: 'border-red-300 bg-red-100 text-red-800 dark:border-red-700 dark:bg-red-950/40 dark:text-red-200',
+    'border-indigo-300 bg-indigo-50 text-indigo-700 dark:border-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300',
+  max: 'border-violet-300 bg-violet-100 text-violet-800 dark:border-violet-700 dark:bg-violet-950/40 dark:text-violet-200',
 }
 
 const DEFAULT_EFFORT_STYLE =
