@@ -4,7 +4,7 @@
 import path from 'node:path'
 import { resolveStreamIdleTimeoutMs } from '../core/config.mjs'
 import { isClientStream, fromClaudeToOpenAIChat, fromClaudeToOpenAICompletions } from './convert.mjs'
-import { getVm, listVms, persistCodexUsage, syncCodexQuotaSchedule } from '../vm/vm-registry.mjs'
+import { getVm, listVms, persistCodexUsage, setScheduleOff, syncCodexQuotaSchedule } from '../vm/vm-registry.mjs'
 import { isValidVmId } from '../vm/vm-file.mjs'
 import { isCodexProtocolAllowed, isCodexVm, normalizeCodexRouting } from './codex-route.mjs'
 import { keyAllowsVm, keyScopeFromRequest, vmPoolDenial } from '../admin/key-scope.mjs'
@@ -969,6 +969,21 @@ export async function handleCodexProtocol({
         reportOpenAIAttempt(vm.id, attemptKind, result?.ttftMs ?? null)
         const failureHold = codexFailureHold(result)
         if (failureHold) holdOpenAIAccount(vm.id, failureHold)
+        // 上游原文落库：以前 error_message 永远是 NULL，排查只能靠客户端贴报错。
+        const upstreamMessage = result?.body?.error?.message || result?.error || null
+        if (upstreamMessage && !logBag.error_message) {
+          logBag.error_message = String(upstreamMessage).slice(0, 300)
+        }
+        // 401 = 凭证过期 / 被吊销，必须重新登录授权。只做 5 分钟内存冷却会让调度器
+        // 反复撞同一个死号，所以这里落成持久状态：关掉调度并写明原因，等重新导入凭证。
+        if (Number(result?.status) === 401) {
+          try {
+            setScheduleOff(projectRoot, vm.id, true, {
+              reason: 'oauth_401_needs_reauth',
+              preserveStatus: true,
+            })
+          } catch {}
+        }
         if (res.headersSent || hopEmitted) {
           stats.errors++
           logBag.error_code = result?.body?.error?.code || 'codex_upstream'
