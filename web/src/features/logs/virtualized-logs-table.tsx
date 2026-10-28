@@ -19,6 +19,21 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip'
 import type { LogsTableColumn } from './column-visibility'
+
+/** TTFT 提示色：< 5s 绿 / 5-15s 黄 / > 15s 红。 */
+function ttftToneClass(ms: number): string {
+  if (ms < 5000) return 'text-green-600 dark:text-green-400'
+  if (ms < 15000) return 'text-yellow-600 dark:text-yellow-400'
+  return 'text-red-600 dark:text-red-400'
+}
+
+/** 输出速率提示色：> 30 绿 / 10-30 黄 / < 10 红。 */
+function tpsToneClass(rate: number): string {
+  if (!Number.isFinite(rate) || rate <= 0) return 'text-muted-foreground'
+  if (rate > 30) return 'text-green-600 dark:text-green-400'
+  if (rate >= 10) return 'text-yellow-600 dark:text-yellow-400'
+  return 'text-red-600 dark:text-red-400'
+}
 import { CostTooltipContent } from './cost-tooltip'
 import {
   ModelDisplayWithRedirect,
@@ -289,6 +304,27 @@ function LogRow({
           )}
         </div>
       )}
+      {hidden('vm') ? null : (
+        <div className='min-w-[90px] flex-[0.9] truncate px-1.5 font-mono text-xs'>
+          {row.vmName || row.vmId ? (
+            <Tooltip delayDuration={250}>
+              <TooltipTrigger asChild>
+                <span className='cursor-help'>
+                  {row.vmName || row.vmId}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent align='end' className='space-y-1 text-xs'>
+                <div>槽位: {row.vmId || '—'}</div>
+                <div>展示名: {row.vmName || '—'}</div>
+                <div>供应商: {row.providerName || '—'}</div>
+                <div>账号: {row.accountId || '—'}</div>
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <span className='text-muted-foreground'>—</span>
+          )}
+        </div>
+      )}
       {hidden('performance') ? null : (
         <div className='min-w-[80px] flex-[0.8] px-1.5 text-right font-mono text-xs'>
           <Tooltip delayDuration={250}>
@@ -296,12 +332,12 @@ function LogRow({
               <div className='flex cursor-help flex-col items-end'>
                 <span>{formatDuration(row.durationMs)}</span>
                 {row.ttftMs != null && row.ttftMs > 0 ? (
-                  <span className='text-[10px] text-muted-foreground'>
+                  <span className={`text-[10px] ${ttftToneClass(row.ttftMs)}`}>
                     TTFT {formatDuration(row.ttftMs)}
                   </span>
                 ) : null}
                 {showRate ? (
-                  <span className='text-[10px] text-muted-foreground'>
+                  <span className={`text-[10px] ${tpsToneClass(rate)}`}>
                     {rate.toFixed(0)} tok/s
                   </span>
                 ) : null}
@@ -485,6 +521,7 @@ export function VirtualizedLogsTable({
                 <HeadCell className='min-w-[90px] flex-[0.8]'>IP</HeadCell>
               )}
               {isHidden('provider') ? null : (
+                <HeadCell className='min-w-[90px] flex-[0.9]'>槽位</HeadCell>
                 <HeadCell className='min-w-[100px] flex-[1.5]'>供应商</HeadCell>
               )}
               <HeadCell className='min-w-[100px] flex-[1.3]'>计费模型</HeadCell>
