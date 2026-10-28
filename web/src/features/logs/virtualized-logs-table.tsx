@@ -520,8 +520,10 @@ export function VirtualizedLogsTable({
               {isHidden('ip') ? null : (
                 <HeadCell className='min-w-[90px] flex-[0.8]'>IP</HeadCell>
               )}
-              {isHidden('provider') ? null : (
+              {isHidden('vm') ? null : (
                 <HeadCell className='min-w-[90px] flex-[0.9]'>槽位</HeadCell>
+              )}
+              {isHidden('provider') ? null : (
                 <HeadCell className='min-w-[100px] flex-[1.5]'>供应商</HeadCell>
               )}
               <HeadCell className='min-w-[100px] flex-[1.3]'>计费模型</HeadCell>
