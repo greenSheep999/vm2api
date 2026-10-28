@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import type { UsageLogFilters, UsageLogRow } from '@/types/panel-usage-logs'
 import { ArrowUp, Loader2 } from 'lucide-react'
@@ -45,6 +45,53 @@ function hitRateToneClass(rate: number | null): string {
   return 'text-red-600 dark:text-red-400'
 }
 
+// ---------- IP 归属地 ----------
+// 进程内缓存，避免同一 IP 反复请求；按需批量拉取，失败静默降级。
+const GEO_CACHE = new Map<string, { country: string | null; city: string | null } | null>()
+const GEO_INFLIGHT = new Set<string>()
+
+function useGeoLabels(ips: string[]): Record<string, string> {
+  const [labels, setLabels] = useState<Record<string, string>>({})
+  const key = [...new Set(ips.filter(Boolean))].sort().join(',')
+  useEffect(() => {
+    if (!key) return
+    const need = key.split(',').filter((ip) => !GEO_CACHE.has(ip) && !GEO_INFLIGHT.has(ip))
+    const apply = () => {
+      const next: Record<string, string> = {}
+      for (const ip of key.split(',')) {
+        const g = GEO_CACHE.get(ip)
+        if (!g) continue
+        const text = [g.city, g.country].filter(Boolean).join(', ')
+        if (text) next[ip] = text
+      }
+      setLabels(next)
+    }
+    if (!need.length) {
+      apply()
+      return
+    }
+    for (const ip of need) GEO_INFLIGHT.add(ip)
+    let cancelled = false
+    api<{ geo: Record<string, { country: string | null; city: string | null } | null> }>(
+      `/api/panel/geoip?ips=${encodeURIComponent(need.join(','))}`,
+    )
+      .then((r) => {
+        for (const [ip, g] of Object.entries(r.geo || {})) GEO_CACHE.set(ip, g)
+      })
+      .catch(() => {
+        for (const ip of need) GEO_CACHE.set(ip, null)
+      })
+      .finally(() => {
+        for (const ip of need) GEO_INFLIGHT.delete(ip)
+        if (!cancelled) apply()
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [key])
+  return labels
+}
+
 /** 时长拆成「数值 + 单位」，便于数值上色、单位置灰。null 原样返回占位。 */
 function splitDuration(ms: number | null | undefined): { n: string; u: string } {
   if (ms == null || !Number.isFinite(ms)) return { n: '-', u: '' }
@@ -83,6 +130,7 @@ import { cacheWriteSplit, copyText, hasFastMode } from './log-display'
 import { ProviderCell } from './provider-chain-popover'
 import { usageLogsBatchQueryOptions } from './queries'
 import { RelativeTime } from './relative-time'
+import { api } from '@/lib/api'
 
 const ROW_HEIGHT = 52
 const SCROLL_TOP_THRESHOLD = 500
@@ -165,6 +213,7 @@ function LogRow({
 }) {
   const nonBilling = isNonBillingEndpoint(row.endpoint)
   const hits = cacheHitRate(row)
+  const geoLabels = useGeoLabels(row.clientIp ? [row.clientIp] : [])
   const cache = cacheWriteSplit({
     total: row.cacheCreationInputTokens,
     fiveM: row.cacheCreation5mInputTokens,
@@ -228,14 +277,21 @@ function LogRow({
       {hidden('ip') ? null : (
         <div className='min-w-[90px] flex-[0.8] overflow-hidden px-1.5'>
           {row.clientIp ? (
-            <button
-              type='button'
-              title='点击复制'
-              className='block w-full max-w-full min-w-0 cursor-pointer truncate text-left font-mono text-xs hover:underline'
-              onClick={() => row.clientIp && void copyText(row.clientIp)}
-            >
-              {row.clientIp}
-            </button>
+            <>
+              <button
+                type='button'
+                title='点击复制'
+                className='block w-full max-w-full min-w-0 cursor-pointer truncate text-left font-mono text-xs hover:underline'
+                onClick={() => row.clientIp && void copyText(row.clientIp)}
+              >
+                {row.clientIp}
+              </button>
+              {geoLabels[row.clientIp] ? (
+                <span className='block truncate text-[10px] text-muted-foreground'>
+                  {geoLabels[row.clientIp]}
+                </span>
+              ) : null}
+            </>
           ) : (
             <span className='block font-mono text-xs text-muted-foreground'>
               —

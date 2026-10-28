@@ -5359,6 +5359,46 @@ export function createPanelHandler(ctx) {
         return json(res, 200, panel.ok({ dry, applied, count: applied.length }))
       }
 
+      // GET /api/panel/geoip?ips=a,b,c — 批量 IP 归属地（内存缓存，避免重复打 ip-api）
+      const GEOIP_CACHE =
+        (globalThis.__vm2apiGeoipCache ||= new Map())
+      if (req.method === 'GET' && p === '/api/panel/geoip') {
+        const raw = url.searchParams.get('ips') || ''
+        const ips = [...new Set(raw.split(',').map((x) => x.trim()).filter(Boolean))].slice(0, 80)
+        const out = {}
+        await Promise.all(
+          ips.map(async (ip) => {
+            if (GEOIP_CACHE.has(ip)) {
+              out[ip] = GEOIP_CACHE.get(ip)
+              return
+            }
+            try {
+              const res = await fetch(
+                `http://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,country,countryCode,regionName,city,timezone`,
+                { signal: AbortSignal.timeout(3000) },
+              )
+              const j = await res.json()
+              const geo =
+                j && j.status === 'success'
+                  ? {
+                      country: j.country || null,
+                      country_code: j.countryCode || null,
+                      region: j.regionName || null,
+                      city: j.city || null,
+                      timezone: j.timezone || null,
+                    }
+                  : null
+              if (GEOIP_CACHE.size > 5000) GEOIP_CACHE.clear()
+              GEOIP_CACHE.set(ip, geo)
+              out[ip] = geo
+            } catch {
+              out[ip] = null
+            }
+          }),
+        )
+        return json(res, 200, panel.ok({ geo: out }))
+      }
+
       // GET /api/panel/routing
       if (req.method === 'GET' && p === '/api/panel/routing') {
         const routingConfig = {
