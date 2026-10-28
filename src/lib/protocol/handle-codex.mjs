@@ -52,6 +52,7 @@ import {
 import { orderCodexSessionSlots, codexSlotAllowsModel, isCodexFailoverError } from '../pool/codex-slot-pool.mjs'
 import {
   holdOpenAIAccount,
+  holdOpenAIModel,
   reportOpenAIAttempt,
   tryAcquireOpenAISlot,
   waitForOpenAICapacity,
@@ -973,6 +974,22 @@ export async function handleCodexProtocol({
         const upstreamMessage = result?.body?.error?.message || result?.error || null
         if (upstreamMessage && !logBag.error_message) {
           logBag.error_message = String(upstreamMessage).slice(0, 300)
+        }
+        // 套餐不支持该模型：账号还是活的，只冷却 (账号, 模型) 这一对，
+        // 下次同模型请求直接跳过它，别的模型照常用。
+        if (
+          Number(result?.status) === 400 &&
+          /model is not supported when using codex|model_not_supported|unsupported model/i.test(
+            `${result?.body?.error?.code || ''} ${result?.body?.error?.message || ''}`,
+          )
+        ) {
+          const requested = converted?.body?.model || logBag.upstream_model || null
+          if (requested) {
+            holdOpenAIModel(vm.id, requested, {
+              until: Date.now() + 10 * 60_000,
+              reason: 'model_not_supported',
+            })
+          }
         }
         // 401 = 凭证过期 / 被吊销，必须重新登录授权。只做 5 分钟内存冷却会让调度器
         // 反复撞同一个死号，所以这里落成持久状态：关掉调度并写明原因，等重新导入凭证。

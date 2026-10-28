@@ -90,6 +90,40 @@ export function clearOpenAIAccountHold(id) {
   holds.delete(String(id || ''))
 }
 
+// ---------- (账号, 模型) 粒度冷却 ----------
+// 上游按套餐拒绝某个模型时，账号本身还是活的（别的模型照样能跑），
+// 所以只能冷却这个组合，不能把整个账号关掉。对齐 sub2api 的 SetModelRateLimit。
+const modelHolds = new Map()
+const modelKey = (id, model) => `${String(id || '')}\u0000${String(model || '')}`
+
+/** 该账号对这个模型的冷却，过期即清。 */
+export function openAIModelHold(id, model, now = Date.now()) {
+  const key = modelKey(id, model)
+  const hold = modelHolds.get(key)
+  if (!hold) return null
+  if (hold.until <= now) {
+    modelHolds.delete(key)
+    return null
+  }
+  return { until: hold.until, reason: hold.reason, set_at: hold.set_at }
+}
+
+/** 冷却一个 (账号, 模型) 组合。同一 key 取最长有效期。 */
+export function holdOpenAIModel(
+  id,
+  model,
+  { until, reason = 'model_not_supported', now = Date.now() } = {},
+) {
+  const key = modelKey(id, model)
+  const at = Number(until) || 0
+  if (!key || !model || !(at > now)) return null
+  const current = modelHolds.get(key)
+  if (current && current.until >= at) return { ...current }
+  const next = { until: at, reason: String(reason), set_at: now }
+  modelHolds.set(key, next)
+  return { ...next }
+}
+
 export function readOpenAICursor() {
   return roundRobinCursor
 }

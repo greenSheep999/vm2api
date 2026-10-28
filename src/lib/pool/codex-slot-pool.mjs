@@ -16,6 +16,7 @@ import { expiresAtToMs } from '../oauth/oauth-credentials.mjs'
 import {
   bumpOpenAICursor,
   openAIAccountHold,
+  openAIModelHold,
   openAIRuntimeSignals,
   readOpenAICursor,
 } from './openai-account-runtime.mjs'
@@ -187,6 +188,9 @@ export function codexAccountStatus(vm, now = Date.now(), policy = null) {
 /** Panel allowlist on a GPT slot. No model or no list means allowed. */
 export function codexSlotAllowsModel(vm, model) {
   if (!model) return true
+  // 该账号刚被上游按套餐拒过这个模型：冷却是 (账号, 模型) 粒度，
+  // 账号跑别的模型不受影响。
+  if (openAIModelHold(vm?.id, model)) return false
   return modelMatchesAllowlist(model, vm?.allowed_models ?? vm?.policy?.allowed_models)
 }
 
@@ -367,6 +371,17 @@ export function isCodexFailoverError(result) {
   const status = Number(result.status) || 0
   const code = String(result.body?.error?.code || result.error_code || '')
   const message = String(result.body?.error?.message || result.error || '')
+  // 账号套餐不支持该模型（Codex 的确定性 400）：
+  // "The 'gpt-6-astra' model is not supported when using Codex with a ChatGPT account."
+  // 请求本身没问题，换到别的座位大概率能成，所以要换槽；同时调用方会把
+  // (账号, 模型) 冷却掉，避免下一次继续撞同一个号。
+  if (
+    status === 400 &&
+    /model is not supported when using codex|model_not_supported|unsupported model/i.test(
+      `${code} ${message}`,
+    )
+  )
+    return true
   // A request-shaped rejection will fail the same way on every seat. Do not
   // burn the pool on a content policy / invalid body / broken tool call.
   if (
