@@ -12,6 +12,7 @@ import {
   PackageCheck,
   RadioTower,
   ScrollText,
+  Zap,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -19,6 +20,7 @@ export const SETTINGS_TABS = [
   ['sticky', '粘性'],
   ['pool', '账号池'],
   ['quota', '配额'],
+  ['autosched', '自动调度'],
   ['openai', 'OpenAI'],
   ['logs', '日志'],
   ['protocol', '协议'],
@@ -47,6 +49,7 @@ export const SETTINGS_NAV_GROUPS: {
       { id: 'sticky', icon: Magnet },
       { id: 'pool', icon: Layers },
       { id: 'quota', icon: Gauge },
+      { id: 'autosched', icon: Zap },
       { id: 'openai', icon: Bot },
     ],
   },

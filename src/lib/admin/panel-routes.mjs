@@ -5169,6 +5169,108 @@ export function createPanelHandler(ctx) {
         )
       }
 
+      // ===== 自动权重调度（策略存 data/auto-schedule.json，由外部执行器读取并应用）=====
+      const autoSchedPath = path.join(cfg.paths.project, 'data', 'auto-schedule.json')
+      const AUTO_SCHED_DEFAULTS = {
+        enabled: false,
+        window_minutes: 60,
+        min_samples: 8,
+        fast_ms: 8000,
+        slow_ms: 20000,
+        fast_weight: 20,
+        mid_weight: 5,
+        slow_weight: 1,
+        hysteresis: 3,
+        cooldown_seconds: 600,
+        interval_minutes: 10,
+      }
+      const readAutoSchedPolicy = () => {
+        try {
+          const raw = JSON.parse(fs.readFileSync(autoSchedPath, 'utf8'))
+          return { ...AUTO_SCHED_DEFAULTS, ...raw }
+        } catch {
+          return { ...AUTO_SCHED_DEFAULTS }
+        }
+      }
+      const writeAutoSchedPolicy = (patch) => {
+        const next = { ...readAutoSchedPolicy(), ...patch }
+        fs.mkdirSync(path.dirname(autoSchedPath), { recursive: true })
+        fs.writeFileSync(autoSchedPath, JSON.stringify(next, null, 2))
+        return next
+      }
+      const autoSchedStats = (minutes) => {
+        const db = getDb()
+        const rows = db
+          .prepare(
+            "SELECT vm_id, first_token_ms FROM usage_logs WHERE created_at > datetime('now', ?) AND status=200 AND first_token_ms>0 AND vm_id IS NOT NULL",
+          )
+          .all(`-${minutes} minutes`)
+        const by = new Map()
+        for (const row of rows) {
+          if (!by.has(row.vm_id)) by.set(row.vm_id, [])
+          by.get(row.vm_id).push(row.first_token_ms)
+        }
+        const out = []
+        for (const [vm_id, vals] of by) {
+          const sv = vals.slice().sort((a, b) => a - b)
+          out.push({ vm_id, n: vals.length, p50: sv[Math.floor(sv.length / 2)] })
+        }
+        out.sort((a, b) => a.vm_id.localeCompare(b.vm_id))
+        return out
+      }
+
+      // GET /api/panel/auto-schedule
+      if (req.method === 'GET' && p === '/api/panel/auto-schedule') {
+        const policy = readAutoSchedPolicy()
+        const vms = listVms(cfg.paths.project)
+        const weights = new Map(vms.map((v) => [v.id, Number(v.policy?.weight ?? 1) || 1]))
+        return json(
+          res,
+          200,
+          panel.ok({
+            policy,
+            stats: autoSchedStats(policy.window_minutes).map((s) => ({
+              ...s,
+              weight: weights.get(s.vm_id) ?? null,
+            })),
+          }),
+        )
+      }
+      // PUT /api/panel/auto-schedule
+      if (req.method === 'PUT' && p === '/api/panel/auto-schedule') {
+        const body = await readBody(req, 64 * 1024)
+        const patch = {}
+        const ranges = {
+          window_minutes: [5, 1440],
+          min_samples: [1, 200],
+          fast_ms: [500, 120000],
+          slow_ms: [1000, 300000],
+          fast_weight: [1, 100],
+          mid_weight: [1, 100],
+          slow_weight: [1, 100],
+          hysteresis: [1, 20],
+          cooldown_seconds: [0, 86400],
+          interval_minutes: [1, 1440],
+        }
+        for (const [key, [min, max]] of Object.entries(ranges)) {
+          if (!Object.prototype.hasOwnProperty.call(body || {}, key)) continue
+          const n = Math.round(Number(body[key]))
+          if (!Number.isFinite(n)) continue
+          patch[key] = Math.min(max, Math.max(min, n))
+        }
+        if (typeof body?.enabled === 'boolean') patch.enabled = body.enabled
+        return json(res, 200, panel.ok({ policy: writeAutoSchedPolicy(patch) }))
+      }
+      // GET /api/panel/auto-schedule/stats
+      if (req.method === 'GET' && p === '/api/panel/auto-schedule/stats') {
+        const policy = readAutoSchedPolicy()
+        return json(
+          res,
+          200,
+          panel.ok({ window_minutes: policy.window_minutes, stats: autoSchedStats(policy.window_minutes) }),
+        )
+      }
+
       // GET /api/panel/routing
       if (req.method === 'GET' && p === '/api/panel/routing') {
         const routingConfig = {

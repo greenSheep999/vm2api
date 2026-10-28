@@ -22,6 +22,7 @@ import { PageHeader } from '@/components/page-header'
 import { QueryGate } from '@/components/query-gate'
 import { dashboardQueryOptions } from '@/features/overview/queries'
 import { AboutPane } from '@/features/settings/about-pane'
+import { AutoSchedulePane } from '@/features/settings/auto-schedule-pane'
 import { BackupPane } from '@/features/settings/backup-pane'
 import { HealthPane } from '@/features/settings/health-pane'
 import { LogsPane } from '@/features/settings/logs-pane'
@@ -458,6 +459,7 @@ export function SettingsPage() {
                   }
                 />
               ) : null}
+              {tab === 'autosched' ? <AutoSchedulePane /> : null}
               {tab === 'socks5' ? <Socks5Pane /> : null}
               {tab === 'backup' ? <BackupPane /> : null}
               {tab === 'about' ? <AboutPane /> : null}
