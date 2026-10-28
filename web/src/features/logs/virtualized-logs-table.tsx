@@ -45,6 +45,19 @@ function hitRateToneClass(rate: number | null): string {
   return 'text-red-600 dark:text-red-400'
 }
 
+/** 时长拆成「数值 + 单位」，便于数值上色、单位置灰。 */
+function splitDuration(ms: number): { n: string; u: string } {
+  return ms >= 1000
+    ? { n: (ms / 1000).toFixed(2), u: 's' }
+    : { n: String(Math.round(ms)), u: 'ms' }
+}
+
+/** 金额拆成「符号 + 数值」。 */
+function splitCurrency(text: string): { sym: string; n: string } {
+  if (text.startsWith('$')) return { sym: '$', n: text.slice(1) }
+  return { sym: '', n: text }
+}
+
 /** TTFT 提示色：< 5s 绿 / 5-15s 黄 / > 15s 红。 */
 function ttftToneClass(ms: number): string {
   if (ms < 5000) return 'text-green-600 dark:text-green-400'
@@ -229,6 +242,27 @@ function LogRow({
           )}
         </div>
       )}
+      {hidden('vm') ? null : (
+        <div className='min-w-[90px] flex-[0.9] truncate px-1.5 font-mono text-xs'>
+          {row.vmName || row.vmId ? (
+            <Tooltip delayDuration={250}>
+              <TooltipTrigger asChild>
+                <span className='cursor-help'>
+                  {row.vmName || row.vmId}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent align='end' className='space-y-1 text-xs'>
+                <div>槽位: {row.vmId || '—'}</div>
+                <div>展示名: {row.vmName || '—'}</div>
+                <div>供应商: {row.providerName || '—'}</div>
+                <div>账号: {row.accountId || '—'}</div>
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            <span className='text-muted-foreground'>—</span>
+          )}
+        </div>
+      )}
       {hidden('provider') ? null : (
         <div className='min-w-[100px] flex-[1.5] px-1.5'>
           <ProviderCell
@@ -332,7 +366,19 @@ function LogRow({
             <Tooltip delayDuration={250}>
               <TooltipTrigger asChild>
                 <span className='inline-flex cursor-help items-center gap-1'>
-                  {formatCurrency(row.actualCostUsd ?? row.costUsd, 6)}
+                  {(() => {
+                    const c = splitCurrency(
+                      formatCurrency(row.actualCostUsd ?? row.costUsd, 6),
+                    )
+                    return (
+                      <>
+                        <span className='text-muted-foreground'>{c.sym}</span>
+                        <span className='text-green-600 dark:text-green-400'>
+                          {c.n}
+                        </span>
+                      </>
+                    )
+                  })()}
                   <CostBadges row={row} />
                 </span>
               </TooltipTrigger>
@@ -343,41 +389,32 @@ function LogRow({
           )}
         </div>
       )}
-      {hidden('vm') ? null : (
-        <div className='min-w-[90px] flex-[0.9] truncate px-1.5 font-mono text-xs'>
-          {row.vmName || row.vmId ? (
-            <Tooltip delayDuration={250}>
-              <TooltipTrigger asChild>
-                <span className='cursor-help'>
-                  {row.vmName || row.vmId}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent align='end' className='space-y-1 text-xs'>
-                <div>槽位: {row.vmId || '—'}</div>
-                <div>展示名: {row.vmName || '—'}</div>
-                <div>供应商: {row.providerName || '—'}</div>
-                <div>账号: {row.accountId || '—'}</div>
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <span className='text-muted-foreground'>—</span>
-          )}
-        </div>
-      )}
       {hidden('performance') ? null : (
         <div className='min-w-[80px] flex-[0.8] px-1.5 text-right font-mono text-xs'>
           <Tooltip delayDuration={250}>
             <TooltipTrigger asChild>
               <div className='flex cursor-help flex-col items-end'>
-                <span>{formatDuration(row.durationMs)}</span>
+                <span>
+                  <span>{splitDuration(row.durationMs).n}</span>
+                  <span className='text-muted-foreground'>
+                    {splitDuration(row.durationMs).u}
+                  </span>
+                </span>
                 {row.ttftMs != null && row.ttftMs > 0 ? (
-                  <span className={`text-[10px] ${ttftToneClass(row.ttftMs)}`}>
-                    TTFT {formatDuration(row.ttftMs)}
+                  <span className='text-[10px]'>
+                    <span className='text-muted-foreground'>TTFT </span>
+                    <span className={ttftToneClass(row.ttftMs)}>
+                      {splitDuration(row.ttftMs).n}
+                    </span>
+                    <span className='text-muted-foreground'>
+                      {splitDuration(row.ttftMs).u}
+                    </span>
                   </span>
                 ) : null}
                 {showRate ? (
-                  <span className={`text-[10px] ${tpsToneClass(rate)}`}>
-                    {rate.toFixed(0)} tok/s
+                  <span className='text-[10px]'>
+                    <span className={tpsToneClass(rate)}>{rate.toFixed(0)}</span>
+                    <span className='text-muted-foreground'> tok/s</span>
                   </span>
                 ) : null}
               </div>
