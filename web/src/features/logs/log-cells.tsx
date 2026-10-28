@@ -170,7 +170,7 @@ export function ModelDisplayWithRedirect({
             </div>
             <div>发往上游: {audit.sentUpstreamModel || '—'}</div>
             <div>上游返回: {audit.upstreamResponseModel || '—'}</div>
-            <div className='text-muted-foreground'>
+            <div className='text-primary-foreground/75'>
               {audit.downgraded
                 ? '上游用别的模型回包，计费仍按发往上游的模型计算。'
                 : '仅名称变体（日期后缀等），视为同一模型。'}

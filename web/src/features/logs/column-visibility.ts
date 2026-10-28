@@ -5,7 +5,7 @@ export const LOGS_TABLE_COLUMNS = [
   { id: 'sessionId', label: '出站 Session' },
   { id: 'ip', label: 'IP' },
   { id: 'vm', label: '槽位' },
-  { id: 'provider', label: '供应商' },
+  { id: 'provider', label: '账号' },
   { id: 'tokens', label: 'Tokens' },
   { id: 'cache', label: '缓存' },
   { id: 'performance', label: '性能' },

@@ -285,7 +285,7 @@ function LogRow({
       </div>
       {hidden('user') ? null : (
         <div
-          className='min-w-[50px] flex-[0.8] truncate px-1.5 text-sm'
+          className='min-w-[48px] flex-[0.5] truncate px-2 text-[11px]'
           title={row.userName ?? undefined}
         >
           {row.userName || '-'}
@@ -293,20 +293,20 @@ function LogRow({
       )}
       {hidden('key') ? null : (
         <div
-          className='min-w-[50px] flex-[0.6] truncate px-1.5 font-mono text-xs'
+          className='min-w-[76px] flex-[0.9] truncate px-2 font-mono text-[11px]'
           title={row.keyName ?? undefined}
         >
           {row.keyName || '-'}
         </div>
       )}
       {hidden('sessionId') ? null : (
-        <div className='min-w-[80px] flex-[0.8] px-1.5'>
+        <div className='min-w-[124px] flex-[1.2] px-2'>
           {row.sessionId ? (
             <Tooltip delayDuration={300}>
               <TooltipTrigger asChild>
                 <button
                   type='button'
-                  className='w-full cursor-pointer truncate text-left font-mono text-xs hover:underline'
+                  className='w-full cursor-pointer truncate text-left font-mono text-[11px] text-muted-foreground hover:underline'
                   onClick={() => row.sessionId && void copyText(row.sessionId)}
                 >
                   {row.sessionId}
@@ -325,12 +325,12 @@ function LogRow({
               </TooltipContent>
             </Tooltip>
           ) : (
-            <span className='font-mono text-xs text-muted-foreground'>-</span>
+            <span className='font-mono text-[11px] text-muted-foreground'>-</span>
           )}
         </div>
       )}
       {hidden('ip') ? null : (
-        <div className='min-w-[90px] flex-[0.8] overflow-hidden px-1.5'>
+        <div className='min-w-[112px] flex-[1] overflow-hidden px-2'>
           {row.clientIp ? (
             <>
               <button
@@ -371,7 +371,7 @@ function LogRow({
               <TooltipContent align='end' className='space-y-1 text-xs'>
                 <div>槽位: {row.vmId || '—'}</div>
                 <div>展示名: {row.vmName || '—'}</div>
-                <div>供应商: {row.providerName || '—'}</div>
+                <div>账号: {row.providerName || '—'}</div>
                 <div>账号: {row.accountId || '—'}</div>
               </TooltipContent>
             </Tooltip>
@@ -391,21 +391,13 @@ function LogRow({
         </div>
       )}
       <div className='min-w-[100px] flex-[1.3] px-1.5 font-mono text-xs'>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className='flex min-w-0 cursor-help items-center gap-1 truncate'>
-              <ModelDisplayWithRedirect
-                row={row}
-                onRedirectClick={() =>
-                  onOpenDetail(row, { scrollToRedirect: true })
-                }
-              />
-            </div>
-          </TooltipTrigger>
-          <TooltipContent>
-            <p className='text-xs'>{row.originalModel || row.model || '-'}</p>
-          </TooltipContent>
-        </Tooltip>
+        {/* 不再套一层「显示模型名」的 tooltip：它和降级行的 tooltip 会同时弹出。 */}
+        <div className='flex min-w-0 items-center gap-1 truncate'>
+          <ModelDisplayWithRedirect
+            row={row}
+            onRedirectClick={() => onOpenDetail(row, { scrollToRedirect: true })}
+          />
+        </div>
       </div>
       {hidden('tokens') ? null : (
         <div className='min-w-[70px] flex-[0.7] px-1.5 text-right font-mono text-xs'>
@@ -824,27 +816,27 @@ export function VirtualizedLogsTable({
                 时间
               </HeadCell>
               {isHidden('user') ? null : (
-                <HeadCell className='min-w-[50px] flex-[0.8]'>用户</HeadCell>
+                <HeadCell className='min-w-[48px] flex-[0.5] px-2'>用户</HeadCell>
               )}
               {isHidden('key') ? null : (
-                <HeadCell className='min-w-[50px] flex-[0.6]'>密钥</HeadCell>
+                <HeadCell className='min-w-[76px] flex-[0.9] px-2'>密钥</HeadCell>
               )}
               {isHidden('sessionId') ? null : (
                 <HeadCell
-                  className='min-w-[80px] flex-[0.8]'
+                  className='min-w-[124px] flex-[1.2] px-2'
                   title='实际发往上游的会话 id'
                 >
                   出站 Session
                 </HeadCell>
               )}
               {isHidden('ip') ? null : (
-                <HeadCell className='min-w-[90px] flex-[0.8]'>IP</HeadCell>
+                <HeadCell className='min-w-[112px] flex-[1] px-2'>IP</HeadCell>
               )}
               {isHidden('vm') ? null : (
                 <HeadCell className='min-w-[90px] flex-[0.9]'>槽位</HeadCell>
               )}
               {isHidden('provider') ? null : (
-                <HeadCell className='min-w-[100px] flex-[1.5]'>供应商</HeadCell>
+                <HeadCell className='min-w-[100px] flex-[1.5]'>账号</HeadCell>
               )}
               <HeadCell className='min-w-[100px] flex-[1.3]'>计费模型</HeadCell>
               {isHidden('tokens') ? null : (

@@ -1,434 +1,590 @@
-import type { UsageLogRow } from '@/types/panel-usage-logs'
-import { Clock, Gauge, Zap } from 'lucide-react'
+import {
+  Activity,
+  ArrowRightLeft,
+  Clock,
+  Gauge,
+  ListChecks,
+  Server,
+  Timer,
+  Zap,
+} from 'lucide-react'
+import type { UsageLogRow, ProviderChainItem } from '@/types/panel-usage-logs'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 import {
   calculateOutputRate,
   formatDuration,
   formatTokenAmount,
 } from '@/lib/usage-format'
-import { cn } from '@/lib/utils'
-import { Badge } from '@/components/ui/badge'
-import { CircularProgress } from '@/components/ui/circular-progress'
-import { latencySegments, queueWaitMs } from '../log-display'
-import { LatencyBreakdownBar } from './latency-breakdown-bar'
-
-type Assessment = { label: string; color: string; bg: string }
-
-const ASSESSMENTS: Record<
-  'excellent' | 'good' | 'warning' | 'poor',
-  Assessment
-> = {
-  excellent: {
-    label: '优秀',
-    color: 'text-emerald-600',
-    bg: 'bg-emerald-50 dark:bg-emerald-950/20',
-  },
-  good: {
-    label: '良好',
-    color: 'text-blue-600',
-    bg: 'bg-blue-50 dark:bg-blue-950/20',
-  },
-  warning: {
-    label: '警告',
-    color: 'text-amber-600',
-    bg: 'bg-amber-50 dark:bg-amber-950/20',
-  },
-  poor: {
-    label: '较差',
-    color: 'text-rose-600',
-    bg: 'bg-rose-50 dark:bg-rose-950/20',
-  },
-}
-
-function PerformanceGauge({
-  value,
-  max,
-  icon: Icon,
-  label,
-  display,
-  assessment,
-}: {
-  value: number
-  max: number
-  icon: typeof Clock
-  label: string
-  display: string
-  assessment: Assessment
-}) {
-  return (
-    <div
-      className={cn(
-        'flex flex-1 items-center gap-4 rounded-lg border p-4',
-        assessment.bg
-      )}
-    >
-      <div className='relative'>
-        <CircularProgress
-          value={Math.min(value, max)}
-          max={max}
-          size={64}
-          strokeWidth={5}
-          showPercentage={false}
-          toneClassName={assessment.color}
-        />
-        <Icon
-          className={cn(
-            'absolute top-1/2 left-1/2 h-5 w-5 -translate-x-1/2 -translate-y-1/2',
-            assessment.color
-          )}
-        />
-      </div>
-      <div className='min-w-0'>
-        <div className='text-xs text-muted-foreground'>{label}</div>
-        <div className='font-mono text-xl font-bold'>{display}</div>
-        <Badge
-          variant='outline'
-          className={cn('mt-1 text-[10px]', assessment.color)}
-        >
-          {assessment.label}
-        </Badge>
-      </div>
-    </div>
-  )
-}
-
-export function PerformanceTab({ row }: { row: UsageLogRow }) {
-  const { ttftMs, durationMs, outputTokens, firstByteMs, generationMs } = row
-  const rate = calculateOutputRate(outputTokens, generationMs)
-  const wait = row.providerChain[0]?.waitMs ?? null
-  const queued = queueWaitMs(row.providerChain)
-  const scheduling = row.providerChain[0]?.schedulingMs ?? null
-  const breakdown = latencySegments({
-    waitMs: wait,
-    queueWaitMs: queued,
-    schedulingMs: scheduling,
-    firstByteMs,
-    ttftMs,
-    generationMs,
-    durationMs,
-  })
-
-  if (
-    ttftMs == null &&
-    durationMs == null &&
-    firstByteMs == null &&
-    generationMs == null
-  ) {
-    return (
-      <div className='py-8 text-center text-muted-foreground'>
-        <Gauge className='mx-auto mb-2 h-8 w-8 opacity-50' />
-        暂无性能数据
-      </div>
-    )
-  }
-
-  const ttftAssessment =
-    ttftMs == null
-      ? null
-      : ASSESSMENTS[
-          ttftMs < 1000
-            ? 'excellent'
-            : ttftMs < 2000
-              ? 'good'
-              : ttftMs < 3000
-                ? 'warning'
-                : 'poor'
-        ]
-  const rateAssessment =
-    rate == null
-      ? null
-      : ASSESSMENTS[
-          rate >= 80
-            ? 'excellent'
-            : rate >= 50
-              ? 'good'
-              : rate >= 30
-                ? 'warning'
-                : 'poor'
-        ]
-
-  const finalizationMs =
-    breakdown?.find((s) => s.key === 'finalization')?.ms ?? 0
-
-  const rows: [string, string][] = []
-  if (scheduling != null) rows.push(['调度处理', formatDuration(scheduling)])
-  if (queued != null) rows.push(['排队等待', formatDuration(queued)])
-  if (scheduling == null && wait != null)
-    rows.push(['调度与排队（未拆分）', formatDuration(wait)])
-  if (firstByteMs != null)
-    rows.push(['首字节时间（TTFB）', formatDuration(firstByteMs)])
-  if (ttftMs != null)
-    rows.push(['首 Token 时间（TTFT）', formatDuration(ttftMs)])
-  if (generationMs != null && generationMs > 0)
-    rows.push(['上游输出时间（含推理）', formatDuration(generationMs)])
-  if (finalizationMs > 0) rows.push(['收尾', formatDuration(finalizationMs)])
-  if (durationMs != null) rows.push(['总耗时', formatDuration(durationMs)])
-  rows.push(['输出 Tokens', formatTokenAmount(outputTokens)])
-  if (rate != null) rows.push(['输出速率', `${rate.toFixed(1)} tok/s`])
-
-  return (
-    <div className='space-y-6'>
-      {ttftAssessment || rateAssessment ? (
-        <div className='flex flex-col gap-4 sm:flex-row'>
-          {ttftAssessment && ttftMs != null ? (
-            <PerformanceGauge
-              value={ttftMs}
-              max={3000}
-              icon={Clock}
-              label='首 Token 时间'
-              display={formatDuration(ttftMs)}
-              assessment={ttftAssessment}
-            />
-          ) : null}
-          {rateAssessment && rate != null ? (
-            <PerformanceGauge
-              value={rate}
-              max={100}
-              icon={Zap}
-              label='输出速率'
-              display={`${rate.toFixed(1)} tok/s`}
-              assessment={rateAssessment}
-            />
-          ) : null}
-        </div>
-      ) : null}
-      {breakdown ? (
-        <div className='space-y-2'>
-          <h4 className='flex items-center gap-2 text-sm font-semibold'>
-            <Gauge className='h-4 w-4 text-purple-600' />
-            延迟分解
-          </h4>
-          <div className='rounded-lg border bg-card p-4'>
-            <LatencyBreakdownBar
-              waitMs={wait}
-              queueWaitMs={queued}
-              schedulingMs={scheduling}
-              firstByteMs={firstByteMs}
-              ttftMs={ttftMs}
-              generationMs={generationMs}
-              durationMs={durationMs}
-            />
-          </div>
-        </div>
-      ) : null}
-      <div className='space-y-2'>
-        <h4 className='text-sm font-semibold'>性能数据</h4>
-        <div className='divide-y rounded-lg border bg-card'>
-          {rows.map(([label, value]) => (
-            <div
-              key={label}
-              className='flex items-center justify-between px-4 py-3'
-            >
-              <span className='text-sm text-muted-foreground'>{label}</span>
-              <span className='font-mono text-sm font-medium'>{value}</span>
-            </div>
-          ))}
-        </div>
-        {generationMs != null && generationMs > 0 ? (
-          <p className='text-xs text-muted-foreground'>
-            上游输出窗口从首个协议事件计到终止生成事件，含不可见推理；速率用该窗口，不含收尾。
-          </p>
-        ) : null}
-      </div>
-
-      <StageTimeline
-        waitMs={wait}
-        queueWaitMs={queued}
-        schedulingMs={scheduling}
-        firstByteMs={firstByteMs}
-        ttftMs={ttftMs}
-        generationMs={generationMs}
-        durationMs={durationMs}
-      />
-
-      <AttemptBreakdown row={row} />
-    </div>
-  )
-}
-
-function toneOf(ms: number | null, watch: number, slow: number) {
-  if (ms == null) return 'text-muted-foreground'
-  if (ms >= slow) return 'text-rose-600 dark:text-rose-400'
-  if (ms >= watch) return 'text-amber-600 dark:text-amber-400'
-  return 'text-emerald-600 dark:text-emerald-400'
-}
-
-type Stage = {
-  label: string
-  startMs: number | null
-  endMs: number | null
-  ms: number | null
-  note: string
-}
 
 /**
- * 阶段时间线：把一次请求拆成可归因的几段。
+ * 请求计时详情。
  *
- * 只用真正打过点的字段推算；TCP/TLS/DNS/请求体读取/下游写入没有埋点，
- * 单独列成「未采集」，不允许拿 0 或估算值冒充。
+ * 原理照 sub2api 的 `UsageTimingDialog`（四档健康带 + 六指标 + 三列分组 +
+ * 比例时间线 + 每次尝试 + 未采集显式标注），外观用本仓库既有组件与配色：
+ * `rounded-lg border bg-card`、图标块指标卡、`Badge`、`Alert`。
+ *
+ * 阈值（同 sub2api 的 `latencyHealth.ts` / `requestTimingHealth.ts`）：
+ *   首 Token：10s / 30s / 60s        总耗时：60s / 180s / 300s
+ *   本地与连接阶段：200ms / 1s / 5s   TPS：≥20 正常、10–20 注意、<10 严重
  */
-function StageTimeline({
-  waitMs,
-  queueWaitMs,
-  schedulingMs,
-  firstByteMs,
-  ttftMs,
-  generationMs,
-  durationMs,
+
+type Health = 'good' | 'warn' | 'slow' | 'critical' | 'neutral'
+
+const TEXT: Record<Health, string> = {
+  good: 'text-emerald-600 dark:text-emerald-400',
+  warn: 'text-amber-600 dark:text-amber-400',
+  slow: 'text-orange-600 dark:text-orange-400',
+  critical: 'text-rose-600 dark:text-rose-400',
+  neutral: 'text-muted-foreground',
+}
+
+const DOT: Record<Health, string> = {
+  good: 'bg-emerald-500',
+  warn: 'bg-amber-500',
+  slow: 'bg-orange-500',
+  critical: 'bg-rose-500',
+  neutral: 'bg-muted-foreground/50',
+}
+
+const HEALTH_LABEL: Record<Health, string> = {
+  good: '正常',
+  warn: '注意',
+  slow: '缓慢',
+  critical: '严重',
+  neutral: '信息',
+}
+
+const BADGE: Record<Health, string> = {
+  good: 'border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-300',
+  warn: 'border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300',
+  slow: 'border-orange-300 text-orange-700 dark:border-orange-700 dark:text-orange-300',
+  critical: 'border-rose-300 text-rose-700 dark:border-rose-700 dark:text-rose-300',
+  neutral: 'border-border text-muted-foreground',
+}
+
+const FIRST_TOKEN = { warn: 10_000, slow: 30_000, critical: 60_000 }
+const DURATION = { warn: 60_000, slow: 180_000, critical: 300_000 }
+const STAGE = { warn: 200, slow: 1_000, critical: 5_000 }
+
+function classify(
+  ms: number | null | undefined,
+  band: { warn: number; slow: number; critical: number },
+): Health {
+  if (ms == null || !Number.isFinite(ms) || ms < 0) return 'neutral'
+  if (ms >= band.critical) return 'critical'
+  if (ms >= band.slow) return 'slow'
+  if (ms >= band.warn) return 'warn'
+  return 'good'
+}
+
+const firstTokenHealth = (ms: number | null) => classify(ms, FIRST_TOKEN)
+const durationHealth = (ms: number | null) => classify(ms, DURATION)
+const stageHealth = (ms: number | null) => classify(ms, STAGE)
+
+function tpsHealth(tps: number | null): Health {
+  if (tps == null || !Number.isFinite(tps)) return 'neutral'
+  if (tps < 10) return 'critical'
+  if (tps < 20) return 'warn'
+  return 'good'
+}
+
+function HealthTag({ health }: { health: Health }) {
+  if (health === 'good' || health === 'neutral') return null
+  return (
+    <Badge
+      variant='outline'
+      className={cn(
+        'shrink-0 px-1 py-0 text-[10px] leading-tight',
+        BADGE[health],
+      )}
+    >
+      {HEALTH_LABEL[health]}
+    </Badge>
+  )
+}
+
+function SectionTitle({
+  icon: Icon,
+  color,
+  children,
 }: {
-  waitMs: number | null
-  queueWaitMs: number | null
-  schedulingMs: number | null
-  firstByteMs: number | null
-  ttftMs: number | null
-  generationMs: number | null
-  durationMs: number | null
+  icon: typeof Zap
+  color: string
+  children: React.ReactNode
 }) {
-  const stages: Stage[] = []
-  const gateEnd = waitMs ?? queueWaitMs ?? schedulingMs ?? null
-  if (gateEnd != null && gateEnd > 0) {
-    stages.push({
-      label: '网关排队/调度',
-      startMs: 0,
-      endMs: gateEnd,
-      ms: gateEnd,
-      note: '取号 + 等并发名额',
-    })
-  }
-  if (firstByteMs != null) {
-    const from = gateEnd != null && gateEnd < firstByteMs ? gateEnd : 0
-    stages.push({
+  return (
+    <h4 className='flex items-center gap-2 text-sm font-semibold'>
+      <Icon className={cn('h-4 w-4', color)} />
+      {children}
+    </h4>
+  )
+}
+
+/** 指标卡：沿用 summary-tab 的图标块布局，右上挂健康标。 */
+function MetricCard({
+  icon: Icon,
+  iconClass,
+  bgClass,
+  label,
+  value,
+  health,
+  hint,
+}: {
+  icon: typeof Zap
+  iconClass: string
+  bgClass: string
+  label: string
+  value: string
+  health: Health
+  hint?: string
+}) {
+  return (
+    <div className='flex items-start gap-3 rounded-lg border bg-card p-3'>
+      <div
+        className={cn(
+          'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg',
+          bgClass,
+        )}
+      >
+        <Icon className={cn('h-4 w-4', iconClass)} />
+      </div>
+      <div className='min-w-0 flex-1'>
+        <div className='flex items-center justify-between gap-2'>
+          <span className='text-xs text-muted-foreground'>{label}</span>
+          <HealthTag health={health} />
+        </div>
+        <div
+          className={cn(
+            'font-mono text-sm font-semibold tabular-nums',
+            TEXT[health],
+          )}
+        >
+          {value}
+        </div>
+        {hint ? (
+          <div className='text-[10px] text-muted-foreground'>{hint}</div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+/** 字段行：左标签右值；缺数据时显式写「未采集」。 */
+function FieldRow({
+  label,
+  value,
+  health = 'neutral',
+  missing,
+}: {
+  label: string
+  value: string | null
+  health?: Health
+  missing?: boolean
+}) {
+  return (
+    <div className='flex items-baseline justify-between gap-3'>
+      <span className='shrink-0 text-xs text-muted-foreground'>{label}</span>
+      <span
+        className={cn(
+          'text-right font-mono text-xs tabular-nums',
+          missing ? 'text-[10px] text-muted-foreground/70' : TEXT[health],
+        )}
+      >
+        {value ?? '未采集'}
+      </span>
+    </div>
+  )
+}
+
+function Card({
+  title,
+  icon,
+  color,
+  children,
+}: {
+  title: string
+  icon: typeof Zap
+  color: string
+  children: React.ReactNode
+}) {
+  return (
+    <section className='space-y-3 rounded-lg border bg-card p-4'>
+      <SectionTitle icon={icon} color={color}>
+        {title}
+      </SectionTitle>
+      <div className='space-y-2.5'>{children}</div>
+    </section>
+  )
+}
+
+type Span = {
+  label: string
+  start: number
+  end: number
+  health: Health
+  neutral?: boolean
+}
+
+function buildSpans(row: UsageLogRow): Span[] {
+  const fb = row.firstByteMs
+  const ttft = row.ttftMs
+  const gen = row.generationMs
+  const dur = row.durationMs
+  const spans: Span[] = []
+  if (fb != null) {
+    spans.push({
       label: '到上游首字节',
-      startMs: from,
-      endMs: firstByteMs,
-      ms: firstByteMs - from,
-      note: '建连 + 上行 + 上游首包',
+      start: 0,
+      end: fb,
+      // 含上游首包（可能排队），按首 token 宽带判；本地阶段才用 200ms/1s/5s。
+      health: firstTokenHealth(fb),
     })
   }
-  if (firstByteMs != null && ttftMs != null && ttftMs >= firstByteMs) {
-    stages.push({
+  if (fb != null && ttft != null && ttft >= fb) {
+    spans.push({
       label: '上游思考（首字节→首 token）',
-      startMs: firstByteMs,
-      endMs: ttftMs,
-      ms: ttftMs - firstByteMs,
-      note: '模型推理，不含网络',
+      start: fb,
+      end: ttft,
+      health: firstTokenHealth(ttft - fb),
     })
   }
-  if (firstByteMs != null && generationMs != null && generationMs > 0) {
-    stages.push({
+  if (fb != null && gen != null && gen > 0) {
+    spans.push({
       label: '上游生成窗口',
-      startMs: firstByteMs,
-      endMs: firstByteMs + generationMs,
-      ms: generationMs,
-      note: '含不可见推理，与上一段重叠',
+      start: fb,
+      end: fb + gen,
+      health: 'neutral',
+      neutral: true,
     })
   }
-  if (firstByteMs != null && generationMs != null && durationMs != null) {
-    const end = firstByteMs + generationMs
-    if (durationMs > end) {
-      stages.push({
+  if (dur != null && fb != null && gen != null) {
+    const end = fb + gen
+    if (dur > end) {
+      spans.push({
         label: '收尾（生成结束→响应结束）',
-        startMs: end,
-        endMs: durationMs,
-        ms: durationMs - end,
-        note: '下游写出与清理',
+        start: end,
+        end: dur,
+        health: stageHealth(dur - end),
       })
     }
   }
+  return spans
+}
 
-  if (!stages.length) return null
+export function PerformanceTab({ row }: { row: UsageLogRow }) {
+  const fb = row.firstByteMs
+  const ttft = row.ttftMs
+  const gen = row.generationMs
+  const dur = row.durationMs
+  const rate = calculateOutputRate(row.outputTokens, gen)
+  const thinking = fb != null && ttft != null && ttft >= fb ? ttft - fb : null
+
+  if (fb == null && ttft == null && gen == null && dur == null) {
+    return (
+      <div className='rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground'>
+        <Gauge className='mx-auto mb-2 h-8 w-8 opacity-50' />
+        这次请求没有留下计时数据，无法拆解。
+        <div className='mt-1 text-xs'>
+          历史记录、未采集的协议和失败请求都可能没有阶段数据。
+        </div>
+      </div>
+    )
+  }
+
+  const spans = buildSpans(row)
+  const ttftHealth = firstTokenHealth(ttft)
+  const localStages = spans
+    .filter((s) => !s.neutral)
+    .sort((a, b) => b.end - b.start - (a.end - a.start))
+  const longest = localStages[0] ?? null
+  const scaleMax = Math.max(dur ?? 0, ...spans.map((s) => s.end), 1)
+  const failed = row.statusCode != null && row.statusCode !== 200
+
+  const verdict = failed
+    ? `请求失败（HTTP ${row.statusCode}），先看下方尝试记录。`
+    : ttft == null
+      ? '首 token 数据缺失，无法判断响应速度。'
+      : ttftHealth === 'good'
+        ? `输出在约 ${formatDuration(ttft)} 后开始，处于正常区间。`
+        : `输出在约 ${formatDuration(ttft)} 后才开始，偏慢；对照下方首字节与思考时间。`
 
   return (
-    <div className='space-y-2'>
-      <h4 className='text-sm font-semibold'>阶段拆解</h4>
-      <div className='divide-y rounded-lg border bg-card'>
-        <div className='flex items-center justify-between px-4 py-2 text-[11px] text-muted-foreground'>
-          <span>阶段</span>
-          <span className='font-mono'>起点 → 终点 ／ 耗时</span>
+    <div className='space-y-5'>
+      <div className='rounded-lg border bg-card p-4'>
+        <div className='flex flex-wrap items-baseline justify-between gap-2'>
+          <span className='font-mono text-sm font-semibold'>
+            {row.model ?? row.originalModel ?? '—'}
+          </span>
+          <span className='text-xs text-muted-foreground'>
+            {row.createdAt?.replace('T', ' ').slice(0, 19)}
+          </span>
         </div>
-        {stages.map((s) => (
-          <div key={s.label} className='px-4 py-2.5'>
-            <div className='flex items-baseline justify-between gap-3'>
-              <span className='text-sm'>{s.label}</span>
-              <span
-                className={cn(
-                  'shrink-0 font-mono text-sm font-medium',
-                  toneOf(
-                    s.ms,
-                    s.label.includes('思考') ? 10000 : 3000,
-                    s.label.includes('思考') ? 20000 : 10000,
-                  ),
-                )}
-              >
-                {formatDuration(s.ms)}
-              </span>
-            </div>
-            <div className='mt-0.5 flex items-baseline justify-between gap-3 text-[11px] text-muted-foreground'>
-              <span>{s.note}</span>
-              <span className='font-mono'>
-                {formatDuration(s.startMs)} → {formatDuration(s.endMs)}
-              </span>
-            </div>
-          </div>
-        ))}
+        <div className='mt-1.5 break-all font-mono text-[11px] text-muted-foreground'>
+          {row.requestId ?? '—'}
+        </div>
       </div>
-      <p className='text-xs text-muted-foreground'>
-        未采集：TCP/TLS/DNS 握手、请求体读取、下游写入耗时。这几项没有埋点，
-        不填 0、不估算；面板上出现的耗时都能追到上面的阶段。
+
+      <div className='grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3'>
+        <MetricCard
+          icon={ArrowRightLeft}
+          iconClass='text-sky-600'
+          bgClass='bg-sky-50 dark:bg-sky-950/30'
+          label='首字节 TTFB'
+          value={formatDuration(fb)}
+          health={firstTokenHealth(fb)}
+          hint='建连 + 上行 + 上游首包'
+        />
+        <MetricCard
+          icon={Timer}
+          iconClass='text-blue-600'
+          bgClass='bg-blue-50 dark:bg-blue-950/30'
+          label='首 Token（TTFT）'
+          value={formatDuration(ttft)}
+          health={ttftHealth}
+          hint='从入站算起，含首字节'
+        />
+        <MetricCard
+          icon={Clock}
+          iconClass='text-violet-600'
+          bgClass='bg-violet-50 dark:bg-violet-950/30'
+          label='总耗时'
+          value={formatDuration(dur)}
+          health={durationHealth(dur)}
+        />
+        <MetricCard
+          icon={Activity}
+          iconClass='text-amber-600'
+          bgClass='bg-amber-50 dark:bg-amber-950/30'
+          label='上游思考'
+          value={formatDuration(thinking)}
+          health={firstTokenHealth(thinking)}
+          hint='首字节 → 首 token'
+        />
+        <MetricCard
+          icon={Server}
+          iconClass='text-slate-600'
+          bgClass='bg-slate-50 dark:bg-slate-900/40'
+          label='上游生成窗口'
+          value={formatDuration(gen)}
+          health='neutral'
+          hint='含不可见推理'
+        />
+        <MetricCard
+          icon={Zap}
+          iconClass='text-emerald-600'
+          bgClass='bg-emerald-50 dark:bg-emerald-950/30'
+          label='输出速率'
+          value={rate == null ? '—' : `${rate.toFixed(1)} t/s`}
+          health={tpsHealth(rate)}
+        />
+      </div>
+
+      <Alert>
+        <Gauge className='text-sky-600' />
+        <AlertTitle>这次请求表现如何？</AlertTitle>
+        <AlertDescription>
+          <p>{verdict}</p>
+          {longest ? (
+            <p className='mt-1'>
+              最长的非生成阶段：{longest.label}，
+              {formatDuration(longest.end - longest.start)}
+              。阶段可能重叠，不能直接相加。
+            </p>
+          ) : null}
+          <div className='mt-2 flex flex-wrap gap-x-3 gap-y-1.5 text-[11px]'>
+            {(['good', 'warn', 'slow', 'critical', 'neutral'] as Health[]).map(
+              (h) => (
+                <span key={h} className='inline-flex items-center gap-1.5'>
+                  <span className={cn('h-2 w-2 rounded-full', DOT[h])} />
+                  {HEALTH_LABEL[h]}
+                </span>
+              ),
+            )}
+          </div>
+          <details className='mt-2 text-[11px]'>
+            <summary className='cursor-pointer text-muted-foreground'>
+              颜色怎么读
+            </summary>
+            <p className='mt-1 leading-relaxed text-muted-foreground'>
+              诊断参考带，不是 SLA。首 Token：绿 &lt;10s、黄 10–30s、橙 30–60s、红
+              ≥60s；总耗时：绿 &lt;60s、黄 60–180s、橙 180–300s、红 ≥300s；
+              本地与连接阶段：绿 &lt;200ms、黄 200ms–1s、橙 1–5s、红 ≥5s；
+              TPS：≥20 正常、10–20 注意、&lt;10 严重。长输出天然更慢；字节数、
+              速率、偏移一律按「信息」显示。
+            </p>
+          </details>
+        </AlertDescription>
+      </Alert>
+
+      <div className='grid gap-4 lg:grid-cols-3'>
+        <Card title='客户端 → 网关' icon={ArrowRightLeft} color='text-sky-600'>
+          <FieldRow label='端点' value={row.endpoint ?? '—'} />
+          <FieldRow label='协议' value={row.protocol ?? '—'} />
+          <FieldRow label='流式' value={row.stream ? '是' : '否'} />
+          <FieldRow
+            label='入站消息量'
+            value={`${formatTokenAmount(row.inputTokens)} tokens`}
+          />
+          <FieldRow label='请求体大小' value={null} missing />
+          <FieldRow label='请求体读取耗时' value={null} missing />
+          <FieldRow label='读取速率' value={null} missing />
+        </Card>
+
+        <Card title='网关内部' icon={Server} color='text-violet-600'>
+          <FieldRow
+            label='排队 / 调度'
+            value={
+              row.providerChain[0]?.queueWaitMs != null
+                ? formatDuration(row.providerChain[0].queueWaitMs)
+                : null
+            }
+            health={stageHealth(row.providerChain[0]?.queueWaitMs ?? null)}
+            missing={row.providerChain[0]?.queueWaitMs == null}
+          />
+          <FieldRow label='鉴权与准入' value={null} missing />
+          <FieldRow label='账号选择' value={null} missing />
+          <FieldRow label='取上游凭据' value={null} missing />
+          <FieldRow label='构建上游请求' value={null} missing />
+          <FieldRow
+            label='到上游首字节'
+            value={formatDuration(fb)}
+            health={firstTokenHealth(fb)}
+          />
+          <FieldRow
+            label='上游思考'
+            value={formatDuration(thinking)}
+            health={firstTokenHealth(thinking)}
+          />
+        </Card>
+
+        <Card title='结果与转发' icon={ListChecks} color='text-emerald-600'>
+          <FieldRow
+            label='状态码'
+            value={row.statusCode == null ? '—' : String(row.statusCode)}
+            health={row.statusCode === 200 ? 'good' : 'critical'}
+          />
+          <FieldRow
+            label='尝试次数'
+            value={String(row.attemptCount ?? row.providerChain.length ?? 1)}
+          />
+          <FieldRow label='终态' value={row.finalState ?? '—'} />
+          <FieldRow
+            label='输出 tokens'
+            value={formatTokenAmount(row.outputTokens)}
+          />
+          <FieldRow
+            label='缓存读取'
+            value={formatTokenAmount(row.cacheReadInputTokens)}
+          />
+          <FieldRow label='下行写入字节' value={null} missing />
+          <FieldRow label='下行写/刷耗时' value={null} missing />
+          <FieldRow label='客户端断开' value={null} missing />
+        </Card>
+      </div>
+
+      {spans.length ? (
+        <section className='space-y-3 rounded-lg border bg-card p-4'>
+          <SectionTitle icon={Timer} color='text-blue-600'>
+            处理时间线
+          </SectionTitle>
+          <p className='text-[11px] text-muted-foreground'>
+            起点相对入站。父子区间与读写可能重叠，不能相加；空白处没有埋点。
+          </p>
+          <div className='space-y-3'>
+            {spans.map((s) => {
+              const ms = s.end - s.start
+              const left = (s.start / scaleMax) * 100
+              const width = Math.max((ms / scaleMax) * 100, 0.6)
+              return (
+                <div key={s.label}>
+                  <div className='flex justify-between gap-2 text-[11px]'>
+                    <span>{s.label}</span>
+                    <span className={TEXT[s.health]}>
+                      {formatDuration(s.start)} → {formatDuration(s.end)} ·{' '}
+                      <strong>{formatDuration(ms)}</strong>
+                    </span>
+                  </div>
+                  <div className='mt-1 h-1.5 overflow-hidden rounded-full bg-muted'>
+                    <div
+                      className={cn('h-full rounded-full', DOT[s.health])}
+                      style={{ marginLeft: `${left}%`, width: `${width}%` }}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      <AttemptBreakdown chain={row.providerChain} />
+
+      <p className='text-[11px] leading-relaxed text-muted-foreground'>
+        计时以本网关观测为准，不含公网全链路；首 token 在事件解析阶段测得，
+        写出成功不代表客户端已收到。单次尝试若未落 attempt 记录，
+        「排队 vs 上游」无法拆分。
       </p>
     </div>
   )
 }
 
-/** 每次上游尝试（含失败/切换）的明细。 */
-function AttemptBreakdown({ row }: { row: UsageLogRow }) {
-  const chain = row.providerChain
-  if (!chain.length) {
-    return (
-      <p className='text-xs text-muted-foreground'>
-        本次请求没有尝试记录（单次尝试未落 attempt），因此「排队 vs 上游」无法拆分。
-      </p>
-    )
-  }
+function AttemptBreakdown({ chain }: { chain: ProviderChainItem[] }) {
+  if (!chain.length) return null
   return (
-    <div className='space-y-2'>
-      <h4 className='text-sm font-semibold'>上游尝试（{chain.length}）</h4>
-      <div className='divide-y rounded-lg border bg-card'>
-        {chain.map((a, i) => (
-          <div key={`${a.attemptNumber}-${i}`} className='px-4 py-3'>
-            <div className='flex flex-wrap items-baseline justify-between gap-2'>
-              <span className='text-sm font-medium'>
-                #{a.attemptNumber} {a.vmName || a.vmId || '—'}
-                {a.providerName ? (
-                  <span className='ml-1 text-xs text-muted-foreground'>
-                    {a.providerName}
-                  </span>
-                ) : null}
-              </span>
-              <Badge
-                variant='outline'
-                className={cn(
-                  'px-1.5 py-0 text-[10px] leading-tight',
-                  a.upstreamStatus === 200
-                    ? 'border-emerald-500 text-emerald-600'
-                    : 'border-rose-500 text-rose-600',
-                )}
-              >
-                {a.upstreamStatus ?? '—'}
-              </Badge>
-            </div>
-            <div className='mt-1 grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-muted-foreground sm:grid-cols-4'>
-              <span>排队 {formatDuration(a.queueWaitMs)}</span>
-              <span>调度 {formatDuration(a.schedulingMs)}</span>
-              <span>TTFT {formatDuration(a.ttftMs)}</span>
-              <span>总耗时 {formatDuration(a.latencyMs)}</span>
-            </div>
-            <div className='mt-1 text-[11px] text-muted-foreground'>
-              选择原因 {a.selectionReason || '—'} · 终态 {a.terminalState || '—'}
-              {a.errorScope ? ` · 错误域 ${a.errorScope}` : ''}
-            </div>
+    <div className='space-y-3'>
+      {chain.map((a, i) => (
+        <section
+          key={`${a.attemptNumber}-${i}`}
+          className='space-y-3 rounded-lg border bg-card p-4'
+        >
+          <SectionTitle icon={Server} color='text-slate-600'>
+            上游尝试 #{a.attemptNumber} · 账号{' '}
+            {a.providerName || a.accountId || '—'}
+            {a.vmName || a.vmId ? ` · 槽位 ${a.vmName || a.vmId}` : ''}
+          </SectionTitle>
+          <div className='grid gap-x-8 gap-y-2 md:grid-cols-2'>
+            <FieldRow
+              label='尝试耗时'
+              value={formatDuration(a.latencyMs)}
+              health={stageHealth(a.latencyMs)}
+            />
+            <FieldRow
+              label='状态'
+              value={a.upstreamStatus == null ? '—' : String(a.upstreamStatus)}
+              health={a.upstreamStatus === 200 ? 'good' : 'critical'}
+            />
+            <FieldRow
+              label='排队'
+              value={formatDuration(a.queueWaitMs)}
+              health={stageHealth(a.queueWaitMs)}
+              missing={a.queueWaitMs == null}
+            />
+            <FieldRow
+              label='调度'
+              value={formatDuration(a.schedulingMs)}
+              health={stageHealth(a.schedulingMs)}
+              missing={a.schedulingMs == null}
+            />
+            <FieldRow
+              label='TTFT'
+              value={formatDuration(a.ttftMs)}
+              health={firstTokenHealth(a.ttftMs)}
+              missing={a.ttftMs == null}
+            />
+            <FieldRow label='选择原因' value={a.selectionReason ?? '—'} />
+            <FieldRow label='终态' value={a.terminalState ?? '—'} />
+            <FieldRow
+              label='错误域'
+              value={a.errorScope ?? '—'}
+              health={a.errorScope ? 'warn' : 'neutral'}
+            />
+            <FieldRow label='连接复用' value={null} missing />
+            <FieldRow label='请求/响应字节' value={null} missing />
           </div>
-        ))}
-      </div>
+        </section>
+      ))}
     </div>
   )
 }

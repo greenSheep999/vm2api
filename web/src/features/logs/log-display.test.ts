@@ -214,7 +214,7 @@ describe('display helpers', () => {
   })
 
   it('styles known and unknown effort levels', () => {
-    expect(thinkingEffortBadgeClass('XHigh')).toContain('bg-red-50')
+    expect(thinkingEffortBadgeClass('XHigh')).toContain('bg-indigo-50')
     expect(thinkingEffortBadgeClass('weird')).toContain('bg-muted/40')
   })
 

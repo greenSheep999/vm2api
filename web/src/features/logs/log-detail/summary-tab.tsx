@@ -198,7 +198,7 @@ export function SummaryTab({
           <p className='text-sm text-muted-foreground'>
             {success
               ? '请求成功完成'
-              : '请求失败，以下是详细的错误信息和供应商决策链'}
+              : '请求失败，以下是详细的错误信息和账号决策链'}
           </p>
         </div>
       </div>
