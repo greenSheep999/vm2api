@@ -532,7 +532,15 @@ function LogRow({
         <div className='min-w-[104px] flex-[1] px-1.5 font-mono text-xs'>
           <Tooltip delayDuration={250}>
             <TooltipTrigger asChild>
-              <div className='flex cursor-help items-stretch gap-1.5'>
+              <div
+                className='flex cursor-pointer items-stretch gap-1.5'
+                title='点击查看阶段拆解'
+                onClick={(event) => {
+                  // 只开性能页，别被行级 click 再开一次成 summary。
+                  event.stopPropagation()
+                  onOpenDetail(row, { tab: 'performance' })
+                }}
+              >
                 <div className='flex min-w-0 flex-1 flex-col gap-y-1'>
                   <PerfRow
                     label='TTFT'
