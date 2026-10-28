@@ -5263,7 +5263,9 @@ export function createPanelHandler(ctx) {
         const db = getDb()
         const rows = db
           .prepare(
-            "SELECT vm_id, first_token_ms FROM usage_logs WHERE created_at > datetime('now', ?) AND status=200 AND first_token_ms>0 AND vm_id IS NOT NULL",
+            // created_at 是 RFC3339（带 T/Z），直接和时间函数的结果做字符串比较会错位
+            // （'T' 0x54 > ' ' 0x20），必须先归一到空格分隔的同一格式。
+            "SELECT vm_id, first_token_ms FROM usage_logs WHERE datetime(replace(created_at,'T',' ')) > datetime('now', ?) AND status=200 AND first_token_ms>0 AND vm_id IS NOT NULL",
           )
           .all(`-${minutes} minutes`)
         const by = new Map()
