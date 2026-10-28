@@ -185,6 +185,11 @@ export function toUsageLogRow(row, names, chain = []) {
     actualResponseModel: row.upstream_model ?? null,
     /** 上游实际回包的模型：与 actualResponseModel（发出去的）不同即降级。 */
     upstreamResponseModel: row.upstream_response_model ?? null,
+    upstreamReasoningEffort: row.upstream_reasoning_effort ?? null,
+    turnStateVerdict: row.turn_state_verdict ?? null,
+    turnStateBlocks: row.turn_state_blocks ?? null,
+    turnStateLen: row.turn_state_len ?? null,
+    turnStateIssuedAt: row.turn_state_issued_at ?? null,
     modelMismatch: row.model_mismatch == null ? null : Number(row.model_mismatch),
     endpoint: row.path ?? null,
     protocol: row.protocol ?? null,

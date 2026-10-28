@@ -117,6 +117,11 @@ export type UsageLogRow = {
    * `response.model`）。与「发出去的模型」不同即为真实降级；null = 未采集到。
    */
   upstreamResponseModel: string | null
+  upstreamReasoningEffort: string | null
+  turnStateVerdict: 'ok' | 'short' | 'malformed' | 'absent' | null
+  turnStateBlocks: number | null
+  turnStateLen: number | null
+  turnStateIssuedAt: string | null
   /** 0 | 1 | null（null = 上游未声明模型）。 */
   modelMismatch: number | null
   /** 入站路径，例如 `/v1/messages`。 */

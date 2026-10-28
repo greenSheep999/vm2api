@@ -193,6 +193,10 @@ export type ModelAuditDisplay = {
   downgraded: boolean
   /** 只是同族变体（日期后缀 / -latest 等），不算降级。 */
   variantOnly: boolean
+  /** 上游回显的实际 effort；没回显就是 null。 */
+  upstreamEffort: string | null
+  /** 请求高 effort、上游回显更低档 = "降智"的直接证据。 */
+  effortDowngraded: boolean
 }
 
 /**
@@ -222,6 +226,8 @@ export function resolveModelAuditDisplay(row: {
   model: string | null
   actualResponseModel: string | null
   upstreamResponseModel?: string | null
+  reasoningEffort?: string | null
+  upstreamReasoningEffort?: string | null
 }): ModelAuditDisplay {
   const effectiveRequestModel = row.model ?? row.originalModel
   // actualResponseModel(历史命名) = 发给上游的模型。
@@ -251,6 +257,8 @@ export function resolveModelAuditDisplay(row: {
     upstreamResponseModel,
     downgraded,
     variantOnly: rawDiff && !downgraded,
+    upstreamEffort: row.upstreamReasoningEffort ?? null,
+    effortDowngraded: effortDowngraded(row),
   }
 }
 
@@ -486,4 +494,32 @@ export function latencySegments(input: {
 /** 条宽：真实占比，非零段至少 3%，免得 1ms 段塌成 0 宽却仍出现在图例里。 */
 export function segmentWidth(segment: LatencySegment): number {
   return segment.ms > 0 ? Math.max(segment.percent, 3) : 0
+}
+
+const EFFORT_RANK: Record<string, number> = {
+  none: 0,
+  minimal: 1,
+  auto: 1,
+  low: 2,
+  medium: 3,
+  high: 4,
+  xhigh: 5,
+  max: 6,
+}
+
+/**
+ * 上游是否把思考强度降低了。只在两边都有值且能比较时成立；缺一侧不算降档，
+ * 避免把"上游没回显"误报成降智。
+ */
+export function effortDowngraded(row: {
+  reasoningEffort?: string | null
+  upstreamReasoningEffort?: string | null
+}): boolean {
+  const asked = String(row.reasoningEffort || '').trim().toLowerCase()
+  const got = String(row.upstreamReasoningEffort || '').trim().toLowerCase()
+  if (!asked || !got) return false
+  const a = EFFORT_RANK[asked]
+  const b = EFFORT_RANK[got]
+  if (a == null || b == null) return false
+  return b < a
 }

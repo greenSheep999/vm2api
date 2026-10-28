@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>鹈鹕骑自行车</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #bfe9f5;
+    overflow: hidden;
+    font-family: sans-serif;
+  }
+  svg {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  .pelican {
+    animation: bodyBob 0.8s ease-in-out infinite alternate;
+    transform-origin: 390px 250px;
+  }
+
+  .wing {
+    transform-origin: 365px 205px;
+    animation: wingFlap 1.4s ease-in-out infinite alternate;
+  }
+
+  .leg-front {
+    transform-origin: 385px 292px;
+    animation: pedalLegA 1.2s linear infinite;
+  }
+
+  .leg-back {
+    transform-origin: 385px 292px;
+    animation: pedalLegB 1.2s linear infinite;
+  }
+
+  .wheel-spin {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: wheelSpin 1.2s linear infinite;
+  }
+
+  .crank-spin {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: crankSpin 1.2s linear infinite;
+  }
+
+  .feather {
+    stroke: #253746;
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  @keyframes bodyBob {
+    from { transform: translateY(0); }
+    to { transform: translateY(-7px); }
+  }
+
+  @keyframes wingFlap {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(-9deg); }
+  }
+
+  @keyframes wheelSpin {
+    to { transform: rotate(360deg); }
+  }
+
+  @keyframes crankSpin {
+    to { transform: rotate(360deg); }
+  }
+
+  @keyframes pedalLegA {
+    0%   { transform: rotate(-18deg); }
+    25%  { transform: rotate(18deg); }
+    50%  { transform: rotate(42deg); }
+    75%  { transform: rotate(8deg); }
+    100% { transform: rotate(-18deg); }
+  }
+
+  @keyframes pedalLegB {
+    0%   { transform: rotate(42deg); }
+    25%  { transform: rotate(8deg); }
+    50%  { transform: rotate(-18deg); }
+    75%  { transform: rotate(18deg); }
+    100% { transform: rotate(42deg); }
+  }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg" aria-label="一只鹈鹕骑自行车的二维动画">
+  <rect width="800" height="500" fill="#bfe9f5"/>
+  <circle cx="690" cy="82" r="42" fill="#fff4b0" opacity=".85"/>
+  <path d="M0 410 Q180 395 350 410 T800 405" fill="none" stroke="#78b98b" stroke-width="8"/>
+  <path d="M0 432 Q220 420 420 434 T800 428" fill="none" stroke="#4d956d" stroke-width="4"/>
+
+  <!-- 自行车 -->
+  <g stroke="#263746" stroke-width="7" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <g class="wheel-spin">
+      <circle cx="205" cy="358" r="74" fill="#d9f2f6"/>
+      <circle cx="205" cy="358" r="8" fill="#263746"/>
+      <path d="M205 284V432M131 358H279M153 306L257 410M257 306L153 410"/>
+    </g>
+    <g class="wheel-spin">
+      <circle cx="585" cy="358" r="74" fill="#d9f2f6"/>
+      <circle cx="585" cy="358" r="8" fill="#263746"/>
+      <path d="M585 284V432M511 358H659M533 306L637 410M637 306L533 410"/>
+    </g>
+
+    <path d="M205 358 L330 275 L455 358 L205 358 L385 358 L330 275"/>
+    <path d="M455 358 L585 358"/>
+    <path d="M455 358 L430 250"/>
+    <path d="M430 250 L468 238"/>
+    <path d="M468 238 L492 251"/>
+    <path d="M430 250 L414 230"/>
+    <path d="M414 230 L450 220"/>
+    <path d="M330 275 L316 238"/>
+    <path d="M296 238 H337"/>
+    <path d="M385 358 L425 382"/>
+    <path d="M385 358 L357 332"/>
+  </g>
+
+  <!-- 脚踏板 -->
+  <g class="crank-spin" stroke="#263746" stroke-width="6" fill="none" stroke-linecap="round">
+    <circle cx="385" cy="358" r="12" fill="#f4b942"/>
+    <path d="M385 358 L418 375"/>
+    <path d="M418 375 h24"/>
+    <path d="M385 358 L355 337"/>
+    <path d="M355 337 h-24"/>
+  </g>
+
+  <!-- 鹈鹕 -->
+  <g class="pelican">
+    <!-- 身体 -->
+    <ellipse cx="365" cy="236" rx="91" ry="72" fill="#f4f0df" class="feather"/>
+    <path d="M300 248 Q350 287 423 255 Q407 305 347 300 Q314 290 300 248Z"
+          fill="#d8dfd9" class="feather"/>
+
+    <!-- 尾羽 -->
+    <path d="M294 251 L247 275 L302 279 L263 306 L326 292"
+          fill="#e8eadf" class="feather"/>
+
+    <!-- 翅膀 -->
+    <path class="wing" d="M347 190 Q300 207 299 256 Q321 278 361 268 L392 222 Q379 199 347 190Z"
+          fill="#c9d4d1"/>
+    <path d="M319 222 Q337 232 360 247 M310 244 Q334 250 351 263"
+          fill="none" stroke="#73858a" stroke-width="5"/>
+
+    <!-- 脖子 -->
+    <path d="M395 196 Q407 159 397 126 Q389 103 408 83
+             Q430 62 457 81 Q473 94 456 117
+             Q432 143 443 198Z"
+          fill="#f4f0df" class="feather"/>
+    <path d="M413 137 Q433 151 440 184" fill="none" stroke="#c8d0c8" stroke-width="6"/>
+
+    <!-- 头部 -->
+    <ellipse cx="438" cy="78" rx="47" ry="39" fill="#f4f0df" class="feather"/>
+    <path d="M405 54 Q432 25 464 42 Q478 49 482 67 Q459 56 438 67Z"
+          fill="#d5ddd8" class="feather"/>
+
+    <!-- 眼睛 -->
+    <circle cx="452" cy="70" r="7" fill="#263746"/>
+    <circle cx="454" cy="67" r="2.5" fill="#ffffff"/>
+
+    <!-- 长喙 -->
+    <path d="M468 83 Q540 80 639 111 Q548 137 467 108 Q451 99 468 83Z"
+          fill="#f2a642" class="feather"/>
+    <path d="M468 108 Q520 122 584 115 Q548 166 495 146 Q467 135 468 108Z"
+          fill="#e58c3b" class="feather"/>
+    <path d="M496 127 Q539 131 570 119" fill="none" stroke="#a95d32" stroke-width="4"/>
+    <path d="M625 111 L643 116 L627 124" fill="#d47b32" stroke="#263746" stroke-width="4"/>
+
+    <!-- 腿 -->
+    <g class="leg-front">
+      <path d="M376 282 Q385 321 418 374" fill="none" stroke="#d98132" stroke-width="10" stroke-linecap="round"/>
+      <path d="M416 374 Q432 377 442 375" fill="none" stroke="#d98132" stroke-width="7" stroke-linecap="round"/>
+    </g>
+    <g class="leg-back">
+      <path d="M399 282 Q391 322 355 337" fill="none" stroke="#c96f2d" stroke-width="10" stroke-linecap="round"/>
+      <path d="M355 337 Q340 340 331 337" fill="none" stroke="#c96f2d" stroke-width="7" stroke-linecap="round"/>
+    </g>
+
+    <!-- 腹部羽毛 -->
+    <path d="M343 271 Q365 280 389 270" fill="none" stroke="#bac6c1" stroke-width="5"/>
+  </g>
+
+  <!-- 地面阴影 -->
+  <ellipse cx="395" cy="438" rx="245" ry="13" fill="#326b62" opacity=".22"/>
+</svg>
+</body>
+</html>

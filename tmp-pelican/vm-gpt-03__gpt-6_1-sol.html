@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>鹈鹕骑自行车</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #bfe9f2;
+  }
+  svg {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+  }
+  .wheel {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: wheelSpin 1.2s linear infinite;
+  }
+  .pedal {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: pedalSpin 1.2s linear infinite;
+  }
+  .pelican {
+    transform-box: fill-box;
+    transform-origin: center bottom;
+    animation: bodyBob .6s ease-in-out infinite alternate;
+  }
+  .leg-a {
+    transform-box: fill-box;
+    transform-origin: 370px 280px;
+    animation: legA 1.2s ease-in-out infinite;
+  }
+  .leg-b {
+    transform-box: fill-box;
+    transform-origin: 390px 280px;
+    animation: legB 1.2s ease-in-out infinite;
+  }
+  .wing {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: wingMove .6s ease-in-out infinite alternate;
+  }
+  @keyframes wheelSpin {
+    to { transform: rotate(360deg); }
+  }
+  @keyframes pedalSpin {
+    to { transform: rotate(360deg); }
+  }
+  @keyframes bodyBob {
+    from { transform: translateY(0); }
+    to { transform: translateY(-7px); }
+  }
+  @keyframes legA {
+    0%, 100% { transform: rotate(25deg); }
+    50% { transform: rotate(-25deg); }
+  }
+  @keyframes legB {
+    0%, 100% { transform: rotate(-25deg); }
+    50% { transform: rotate(25deg); }
+  }
+  @keyframes wingMove {
+    from { transform: rotate(2deg); }
+    to { transform: rotate(-7deg); }
+  }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 800 520" xmlns="http://www.w3.org/2000/svg">
+  <rect width="800" height="520" fill="#bfe9f2"/>
+  <circle cx="100" cy="90" r="34" fill="#fff" opacity=".75"/>
+  <circle cx="135" cy="90" r="26" fill="#fff" opacity=".75"/>
+  <circle cx="670" cy="110" r="30" fill="#fff" opacity=".7"/>
+  <circle cx="705" cy="110" r="22" fill="#fff" opacity=".7"/>
+  <path d="M0 430 Q180 395 350 425 T800 415 L800 520H0Z" fill="#91d276"/>
+  <path d="M0 430 Q180 395 350 425 T800 415" fill="none" stroke="#5ca75a" stroke-width="5"/>
+
+  <!-- bicycle -->
+  <g stroke="#263746" stroke-width="8" fill="none" stroke-linejoin="round">
+    <g class="wheel">
+      <circle cx="245" cy="390" r="72" stroke="#202c38" stroke-width="9"/>
+      <circle cx="245" cy="390" r="8" fill="#ef6c4d"/>
+      <path d="M245 318V462M173 390H317M194 339L296 441M296 339L194 441" stroke="#6e8794" stroke-width="3"/>
+    </g>
+    <g class="wheel">
+      <circle cx="555" cy="390" r="72" stroke="#202c38" stroke-width="9"/>
+      <circle cx="555" cy="390" r="8" fill="#ef6c4d"/>
+      <path d="M555 318V462M483 390H627M504 339L606 441M606 339L504 441" stroke="#6e8794" stroke-width="3"/>
+    </g>
+
+    <path d="M245 390 L345 300 L455 390 L245 390 L400 390 L345 300" stroke="#e25743" stroke-width="9"/>
+    <path d="M455 390 L555 390 L530 280" stroke="#e25743" stroke-width="9"/>
+    <path d="M530 280 L580 260 M530 280 L510 245" stroke="#263746" stroke-width="8" stroke-linecap="round"/>
+    <path d="M322 300 L305 274 L350 274" stroke="#263746" stroke-width="8" stroke-linecap="round"/>
+  </g>
+
+  <!-- pedals -->
+  <g class="pedal">
+    <circle cx="400" cy="390" r="13" fill="#f2ad3d" stroke="#263746" stroke-width="5"/>
+    <path d="M400 390 L438 365 M400 390 L365 414" stroke="#263746" stroke-width="7"/>
+    <path d="M432 359 h26 v10 h-26z M352 409 h26 v10 h-26z" fill="#f2ad3d" stroke="#263746" stroke-width="4"/>
+  </g>
+
+  <!-- pelican -->
+  <g class="pelican">
+    <!-- tail -->
+    <path d="M330 276 Q287 269 270 292 Q305 300 337 299Z" fill="#788995" stroke="#263746" stroke-width="5"/>
+    <!-- body -->
+    <ellipse cx="382" cy="239" rx="78" ry="67" fill="#f4f1e7" stroke="#263746" stroke-width="6"/>
+    <ellipse cx="397" cy="255" rx="56" ry="42" fill="#d7e0df" opacity=".9"/>
+    <!-- wing -->
+    <g class="wing">
+      <path d="M355 205 Q420 194 451 240 Q432 284 368 269 Q345 246 355 205Z"
+            fill="#a8b8bd" stroke="#263746" stroke-width="6"/>
+      <path d="M375 221 Q411 226 437 252 M367 238 Q401 244 429 266" fill="none"
+            stroke="#74878e" stroke-width="5"/>
+    </g>
+    <!-- neck -->
+    <path d="M405 204 Q409 158 395 130 Q382 106 405 89 Q435 108 445 145
+             Q455 179 438 216Z" fill="#f4f1e7" stroke="#263746" stroke-width="6"/>
+    <!-- head -->
+    <ellipse cx="421" cy="88" rx="48" ry="39" fill="#f4f1e7" stroke="#263746" stroke-width="6"/>
+    <path d="M386 73 Q395 43 425 44 Q454 47 465 70 Q441 62 418 67Z" fill="#d3dedc"/>
+    <!-- eye -->
+    <circle cx="438" cy="78" r="7" fill="#263746"/>
+    <circle cx="440" cy="76" r="2" fill="#fff"/>
+    <!-- beak and throat pouch -->
+    <path d="M390 91 Q336 82 286 103 Q333 124 397 111 Q420 105 438 94Z"
+          fill="#f3a63b" stroke="#263746" stroke-width="6"/>
+    <path d="M390 105 Q346 113 318 105 Q329 160 382 174 Q411 160 412 119Z"
+          fill="#ef9d3e" stroke="#263746" stroke-width="6"/>
+    <path d="M323 108 Q355 120 397 111" fill="none" stroke="#d87932" stroke-width="4"/>
+    <!-- legs -->
+    <g class="leg-a" fill="none" stroke="#e49332" stroke-width="9" stroke-linecap="round">
+      <path d="M369 278 L365 330 L398 390"/>
+      <path d="M398 390 l-20 8 M398 390 l15 13"/>
+    </g>
+    <g class="leg-b" fill="none" stroke="#e49332" stroke-width="9" stroke-linecap="round">
+      <path d="M399 278 L425 330 L365 414"/>
+      <path d="M365 414 l-20 6 M365 414 l16 10"/>
+    </g>
+    <!-- small crest -->
+    <path d="M393 53 Q390 30 407 40 Q420 18 429 43 Q447 28 448 56"
+          fill="#f4f1e7" stroke="#263746" stroke-width="5"/>
+  </g>
+</svg>
+</body>
+</html>

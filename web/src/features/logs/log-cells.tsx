@@ -136,6 +136,14 @@ export function ModelDisplayWithRedirect({
           <span className='truncate'>{audit.sentUpstreamModel}</span>
         </div>
       ) : null}
+      {audit.effortDowngraded ? (
+        <div className='flex min-w-0 items-center gap-1 truncate text-xs text-rose-600 dark:text-rose-400'>
+          <span className='shrink-0'>↓ 上游降档:</span>
+          <span className='truncate font-medium'>
+            {row.reasoningEffort} → {audit.upstreamEffort}
+          </span>
+        </div>
+      ) : null}
       {audit.secondaryActualModel ? (
         <Tooltip>
           <TooltipTrigger asChild>

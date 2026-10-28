@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>鹈鹕骑自行车</title>
+<style>
+  html,body{margin:0;height:100%;background:#bfe9f5;overflow:hidden}
+  svg{display:block;width:100vw;height:100vh}
+  .wheel{
+    transform-box:fill-box;
+    transform-origin:center;
+    animation:spin 2s linear infinite;
+  }
+  .pedals{
+    transform-box:fill-box;
+    transform-origin:center;
+    animation:spin 1.2s linear infinite;
+  }
+  .pelican{
+    transform-box:fill-box;
+    transform-origin:center;
+    animation:bob .8s ease-in-out infinite alternate;
+  }
+  .leg1{
+    transform-box:fill-box;
+    transform-origin:top center;
+    animation:legA 1.2s ease-in-out infinite alternate;
+  }
+  .leg2{
+    transform-box:fill-box;
+    transform-origin:top center;
+    animation:legB 1.2s ease-in-out infinite alternate;
+  }
+  .wing{
+    transform-box:fill-box;
+    transform-origin:top left;
+    animation:wing .9s ease-in-out infinite alternate;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes bob{from{transform:translateY(0)}to{transform:translateY(5px)}}
+  @keyframes legA{from{transform:rotate(-18deg)}to{transform:rotate(18deg)}}
+  @keyframes legB{from{transform:rotate(18deg)}to{transform:rotate(-18deg)}}
+  @keyframes wing{from{transform:rotate(2deg)}to{transform:rotate(-7deg)}}
+  .outline{stroke:#263746;stroke-width:6;stroke-linejoin:round;stroke-linecap:round}
+</style>
+</head>
+<body>
+<svg viewBox="0 0 900 600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sky" x2="0" y2="1">
+      <stop stop-color="#aee6f3"/>
+      <stop offset="1" stop-color="#e7f8ed"/>
+    </linearGradient>
+    <linearGradient id="body" x2="0" y2="1">
+      <stop stop-color="#fffdf6"/>
+      <stop offset="1" stop-color="#dce7e5"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="900" height="600" fill="url(#sky)"/>
+  <circle cx="110" cy="95" r="42" fill="#fff8bd" opacity=".75"/>
+  <path d="M0 480 Q180 435 350 470 T700 460 T900 475 V600H0Z" fill="#8bd39b"/>
+  <path d="M0 515 Q200 480 390 510 T900 500" fill="none" stroke="#5bb77e" stroke-width="8"/>
+  <path d="M80 440 q25-28 50 0 M730 430 q25-28 50 0" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round"/>
+
+  <!-- bicycle -->
+  <g class="bicycle">
+    <g class="wheel">
+      <circle cx="250" cy="450" r="82" fill="#e9f5f4" stroke="#263746" stroke-width="8"/>
+      <circle cx="250" cy="450" r="10" fill="#263746"/>
+      <path d="M250 368v164M168 450h164M192 392l116 116M308 392L192 508" stroke="#6b9aa1" stroke-width="4"/>
+    </g>
+    <g class="wheel">
+      <circle cx="610" cy="450" r="82" fill="#e9f5f4" stroke="#263746" stroke-width="8"/>
+      <circle cx="610" cy="450" r="10" fill="#263746"/>
+      <path d="M610 368v164M528 450h164M552 392l116 116M668 392L552 508" stroke="#6b9aa1" stroke-width="4"/>
+    </g>
+
+    <path d="M250 450 L365 350 L455 450 L250 450 L610 450 L565 310 L520 310"
+          fill="none" class="outline" stroke="#d45b4c" stroke-width="12"/>
+    <path d="M365 350 L345 315" class="outline" fill="none" stroke="#263746" stroke-width="8"/>
+    <path d="M325 315h55" class="outline" fill="none" stroke="#263746" stroke-width="8"/>
+    <path d="M565 310 L600 275 L650 275" class="outline" fill="none" stroke="#263746" stroke-width="8"/>
+    <path d="M595 275 q20-18 38 0" fill="none" class="outline"/>
+    <circle cx="455" cy="450" r="18" fill="#f1b94d" stroke="#263746" stroke-width="5"/>
+
+    <g class="pedals">
+      <path d="M455 450 L420 415 M455 450 L490 485" stroke="#263746" stroke-width="7"/>
+      <rect x="400" y="405" width="30" height="10" rx="4" fill="#263746"/>
+      <rect x="485" y="480" width="30" height="10" rx="4" fill="#263746"/>
+    </g>
+  </g>
+
+  <!-- pelican -->
+  <g class="pelican">
+    <!-- tail -->
+    <path d="M405 285 Q350 275 325 315 Q370 320 417 315Z" fill="#c8d8d9" class="outline"/>
+    <!-- body -->
+    <ellipse cx="455" cy="270" rx="105" ry="92" fill="url(#body)" class="outline"/>
+    <path d="M382 258 Q420 220 478 228 Q525 236 544 280 Q500 310 430 300Z"
+          fill="#f8fbf6" opacity=".8"/>
+    <!-- wing -->
+    <path class="wing" d="M430 225 Q505 220 540 270 Q516 330 448 326 Q472 285 430 225Z"
+          fill="#b9ced0" class="outline"/>
+    <path d="M456 249 Q492 272 508 304 M450 268 Q480 292 491 315"
+          fill="none" stroke="#78999d" stroke-width="4"/>
+
+    <!-- neck -->
+    <path d="M470 220 Q470 155 495 126 Q515 105 545 116 L570 145
+             Q530 157 530 205 L535 235Z" fill="#f5f8f1" class="outline"/>
+    <!-- head -->
+    <ellipse cx="535" cy="105" rx="54" ry="48" fill="#f8fbf4" class="outline"/>
+    <path d="M496 82 Q525 54 562 76" fill="none" stroke="#b7ccce" stroke-width="12"/>
+    <circle cx="555" cy="94" r="7" fill="#263746"/>
+    <circle cx="557" cy="91" r="2.5" fill="#fff"/>
+
+    <!-- long bill and throat pouch -->
+    <path d="M565 113 Q650 105 758 137 Q674 163 566 139 Q548 133 565 113Z"
+          fill="#f1b44d" class="outline"/>
+    <path d="M565 139 Q622 160 681 143 Q665 218 600 224 Q550 214 535 168Z"
+          fill="#ed9d48" class="outline"/>
+    <path d="M582 151 Q624 174 657 160" fill="none" stroke="#c77935" stroke-width="4"/>
+    <path d="M752 137l22 4" stroke="#263746" stroke-width="5" stroke-linecap="round"/>
+
+    <!-- legs -->
+    <g class="leg1">
+      <path d="M430 330 L410 425" fill="none" stroke="#e79a42" stroke-width="13" stroke-linecap="round"/>
+      <path d="M410 425 l-27 5 M410 425 l24 9" fill="none" stroke="#263746" stroke-width="7" stroke-linecap="round"/>
+    </g>
+    <g class="leg2">
+      <path d="M485 330 L500 425" fill="none" stroke="#e79a42" stroke-width="13" stroke-linecap="round"/>
+      <path d="M500 425 l-25 12 M500 425 l29-3" fill="none" stroke="#263746" stroke-width="7" stroke-linecap="round"/>
+    </g>
+  </g>
+</svg>
+</body>
+</html>

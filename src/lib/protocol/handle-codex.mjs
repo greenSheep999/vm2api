@@ -35,6 +35,7 @@ import {
   writeCodexKernelConfig,
 } from '../transport/codex-kernel-supervisor.mjs'
 import { isLocalEgressProxy } from '../vm/egress.mjs'
+import { TURN_STATE_HEADER, judgeTurnState } from './turn-state.mjs'
 import { vmNodeId } from '../cluster/placement.mjs'
 import { hostProxyUrlForVm } from '../vm/slot-host.mjs'
 import { readCodexAccounts, upsertCodexAccount } from '../vm/codex-slot.mjs'
@@ -362,6 +363,29 @@ export function responseModelFromSseLine(line) {
     const ev = JSON.parse(line.slice(5).trim())
     const m = ev?.response?.model ?? ev?.model
     return typeof m === 'string' && m.trim() ? m.trim() : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 上游**实际使用**的 reasoning effort，从 SSE 回显里取。
+ *
+ * 我们只记录「请求的 effort」是不够的：上游完全可能悄悄把你要求的 xhigh 降成
+ * high，表现就是"变笨了"，而日志里一点痕迹都没有。Responses 与 Chat
+ * Completions 都会在回包里回显 effort，取它才能定位到具体账号。
+ */
+export function responseEffortFromSseLine(line) {
+  if (typeof line !== 'string' || !line.startsWith('data:') || !line.includes('effort')) return null
+  try {
+    const ev = JSON.parse(line.slice(5).trim())
+    const raw =
+      ev?.response?.reasoning?.effort ??
+      ev?.response?.reasoning_effort ??
+      ev?.reasoning?.effort ??
+      ev?.reasoning_effort ??
+      ev?.choices?.[0]?.message?.reasoning_effort
+    return typeof raw === 'string' && raw.trim() ? raw.trim() : null
   } catch {
     return null
   }
@@ -778,6 +802,7 @@ export async function handleCodexProtocol({
         let streamedUsage = null
         let streamedImageUsage = null
         let streamedResponseModel = null
+        let streamedResponseEffort = null
         let conversionError = null
         const attemptStartedAt = Date.now()
         const sessionOptions = {
@@ -840,6 +865,8 @@ export async function handleCodexProtocol({
               if (imageGen) streamedImageUsage = imageGen
               const respModel = responseModelFromSseLine(line)
               if (respModel && !streamedResponseModel) streamedResponseModel = respModel
+              const respEffort = responseEffortFromSseLine(line)
+              if (respEffort && !streamedResponseEffort) streamedResponseEffort = respEffort
               if (!stream) {
                 chunks.push(line)
                 return
@@ -935,6 +962,22 @@ export async function handleCodexProtocol({
           logBag.upstream_model = converted.body.model
           logBag.upstream_response_model =
             streamedResponseModel || result?.body?.model || null
+          logBag.upstream_reasoning_effort =
+            streamedResponseEffort ||
+            result?.body?.reasoning?.effort ||
+            result?.body?.reasoning_effort ||
+            null
+          // 只读检测：把上游铸的回合门票（x-codex-turn-state）记下来，
+          // 按套餐期望块数比对。不注入、不改写。
+          const ticket = judgeTurnState(
+            headerString(result?.headers, TURN_STATE_HEADER),
+            // 套餐决定期望块数：个人 10 块、Team 系 12 块。
+            vm?.codex?.plan_type || vm?.plan_type || vm?.account?.plan_type || null,
+          )
+          logBag.turn_state_verdict = ticket.verdict
+          logBag.turn_state_blocks = ticket.blocks
+          logBag.turn_state_len = ticket.len
+          logBag.turn_state_issued_at = ticket.issued_at
           if (hops > 1) logBag.codex_failed_over = true
           if (!stream) {
             let body

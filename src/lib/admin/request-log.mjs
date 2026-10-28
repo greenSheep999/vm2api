@@ -571,6 +571,11 @@ export class RequestLogStore {
       requested_model: extra.requested_model || extra.model || null,
       upstream_model: extra.upstream_model || null,
       upstream_response_model: extra.upstream_response_model || null,
+      upstream_reasoning_effort: extra.upstream_reasoning_effort || null,
+      turn_state_verdict: extra.turn_state_verdict || null,
+      turn_state_blocks: extra.turn_state_blocks ?? null,
+      turn_state_len: extra.turn_state_len ?? null,
+      turn_state_issued_at: extra.turn_state_issued_at || null,
       // 降级判定 = 「发出去的模型」vs「上游实际回的模型」。两者都缺一即 null（未知），
       // 不能用 requested 与 upstream_model 相比——那两个通常相同，永远看不出降级。
       model_mismatch: modelMismatch(

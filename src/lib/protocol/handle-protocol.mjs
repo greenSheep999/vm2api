@@ -196,6 +196,26 @@ export function responseModelFromSseLine(line) {
   }
 }
 
+/**
+ * 上游**实际使用**的 reasoning effort。与 responseModelFromSseLine 同理：
+ * 只有回包回显的 effort 才能证明上游没把档位偷偷降下去。
+ */
+export function responseEffortFromSseLine(line) {
+  if (typeof line !== 'string' || !line.startsWith('data:') || !line.includes('effort')) return null
+  try {
+    const ev = JSON.parse(line.slice(5).trim())
+    const raw =
+      ev?.response?.reasoning?.effort ??
+      ev?.response?.reasoning_effort ??
+      ev?.reasoning?.effort ??
+      ev?.reasoning_effort ??
+      ev?.choices?.[0]?.message?.reasoning_effort
+    return typeof raw === 'string' && raw.trim() ? raw.trim() : null
+  } catch {
+    return null
+  }
+}
+
 export function createHandleProtocol(deps) {
   const json = (...args) => deps.json(...args)
   const writeSSEHeaders = (...args) => deps.writeSSEHeaders(...args)
@@ -1193,6 +1213,10 @@ export function createHandleProtocol(deps) {
       logBag.upstream_model = result?.model || null
       // 非流式：响应体里的 model 才是上游实际回的模型。
       logBag.upstream_response_model = result?.body?.model || null
+      logBag.upstream_reasoning_effort =
+        result?.body?.reasoning?.effort ||
+        result?.body?.reasoning_effort ||
+        null
       // TTFT is generated content; the upstream window also includes hidden reasoning.
       logBag.first_token_ms = Number.isFinite(result?.firstTokenAt)
         ? Math.max(0, result.firstTokenAt - logCtx.t0)
@@ -1632,6 +1656,7 @@ export function createHandleProtocol(deps) {
           keepalive.arm()
           // 上游实际回包的模型（降级检测用）：与「我们发出去的模型」是两回事。
           let streamedResponseModel = null
+          let streamedResponseEffort = null
           try {
             return await dispatchStreamInference({
               exec: candidate.exec,
@@ -1663,6 +1688,10 @@ export function createHandleProtocol(deps) {
                 const responseModel = responseModelFromSseLine(line)
                 if (responseModel && !streamedResponseModel) {
                   streamedResponseModel = responseModel
+                }
+                const responseEffort = responseEffortFromSseLine(line)
+                if (responseEffort && !streamedResponseEffort) {
+                  streamedResponseEffort = responseEffort
                 }
                 line = restoreToolNamesInSSELine(line, attemptMeta?.toolNames || {})
                 if (personaHideTokens) line = hidePersonaUsageInSseLine(line, personaHideTokens, cacheTtl)
@@ -1735,6 +1764,11 @@ export function createHandleProtocol(deps) {
     // 不拿 result.model 兜底——那可能就是我们自己发出去的值，会把降级洗成「一致」。
     logBag.upstream_response_model =
       streamedResponseModel || result?.body?.model || null
+    logBag.upstream_reasoning_effort =
+      streamedResponseEffort ||
+      result?.body?.reasoning?.effort ||
+      result?.body?.reasoning_effort ||
+      null
     // Kernel stream firstTokenAt is generated content; include admission/setup via t0.
     logBag.first_token_ms = Number.isFinite(result?.firstTokenAt)
       ? Math.max(0, result.firstTokenAt - logCtx.t0)

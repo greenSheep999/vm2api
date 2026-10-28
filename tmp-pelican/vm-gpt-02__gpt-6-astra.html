@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>鹈鹕骑自行车</title>
+<style>
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #bfe9f5;
+  }
+
+  svg {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(#bfe9f5 0%, #eaf9fb 72%, #9bd57d 72%, #77bd63 100%);
+  }
+
+  .cloud {
+    fill: #ffffff;
+    opacity: .8;
+  }
+
+  .outline {
+    stroke: #263238;
+    stroke-width: 4;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+
+  .wheel {
+    fill: none;
+    stroke: #263238;
+    stroke-width: 7;
+  }
+
+  .spoke {
+    stroke: #607d8b;
+    stroke-width: 2;
+  }
+
+  .bike-metal {
+    fill: none;
+    stroke: #e05a47;
+    stroke-width: 7;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+
+  .bike-dark {
+    fill: none;
+    stroke: #263238;
+    stroke-width: 5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .feather {
+    fill: #f4f1df;
+  }
+
+  .wing {
+    fill: #d7d5c7;
+  }
+
+  .wing-tip {
+    fill: #a9a99e;
+  }
+
+  .leg {
+    fill: none;
+    stroke: #d88942;
+    stroke-width: 7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .foot {
+    fill: #d88942;
+    stroke: #263238;
+    stroke-width: 3;
+  }
+
+  .body-bob {
+    animation: bodyBob 1.2s ease-in-out infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+
+  .wing-flap {
+    animation: wingFlap 1.2s ease-in-out infinite;
+    transform-box: fill-box;
+    transform-origin: 245px 180px;
+  }
+
+  .leg-front {
+    animation: pedalLegA 1.2s linear infinite;
+    transform-box: view-box;
+    transform-origin: 240px 278px;
+  }
+
+  .leg-back {
+    animation: pedalLegB 1.2s linear infinite;
+    transform-box: view-box;
+    transform-origin: 240px 278px;
+  }
+
+  .wheel-spin {
+    animation: wheelSpin 1.1s linear infinite;
+    transform-box: view-box;
+    transform-origin: center;
+  }
+
+  .pedal-spin {
+    animation: pedalSpin 1.1s linear infinite;
+    transform-box: view-box;
+    transform-origin: 240px 280px;
+  }
+
+  @keyframes bodyBob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-7px); }
+  }
+
+  @keyframes wingFlap {
+    0%, 100% { transform: rotate(0deg); }
+    50% { transform: rotate(8deg); }
+  }
+
+  @keyframes pedalLegA {
+    0% { transform: rotate(0deg); }
+    50% { transform: rotate(25deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  @keyframes pedalLegB {
+    0% { transform: rotate(180deg); }
+    50% { transform: rotate(205deg); }
+    100% { transform: rotate(540deg); }
+  }
+
+  @keyframes wheelSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  @keyframes pedalSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 520 390" xmlns="http://www.w3.org/2000/svg" aria-label="一只鹈鹕骑自行车的动画">
+
+  <path class="cloud" d="M55 75c0-14 12-25 27-25 8-16 33-20 47-4 5-4 12-6 19-6 16 0 29 12 29 27H55z"/>
+  <path class="cloud" d="M350 55c0-11 9-20 21-20 8-13 28-15 39-2 4-3 9-4 14-4 13 0 23 10 23 22h-97z"/>
+
+  <path d="M0 321 Q100 304 205 320 T420 315 T560 321 V390 H0Z" fill="#77bd63"/>
+  <path d="M0 342 Q110 326 220 340 T450 337 T560 343" fill="none" stroke="#5ca950" stroke-width="4"/>
+
+  <!-- 自行车 -->
+  <g>
+    <g class="wheel-spin">
+      <circle class="wheel" cx="150" cy="292" r="45"/>
+      <circle class="wheel" cx="315" cy="292" r="45"/>
+      <g class="spoke">
+        <path d="M150 247v90M105 292h90M118 260l64 64M118 324l64-64"/>
+        <path d="M315 247v90M270 292h90M283 260l64 64M283 324l64-64"/>
+      </g>
+    </g>
+
+    <path class="bike-metal" d="M150 292 L210 220 L275 292 Z"/>
+    <path class="bike-metal" d="M210 220 L315 292"/>
+    <path class="bike-metal" d="M210 220 L194 191"/>
+    <path class="bike-dark" d="M182 190h28"/>
+    <path class="bike-metal" d="M275 292 L290 207"/>
+    <path class="bike-dark" d="M290 207h29"/>
+    <path class="bike-dark" d="M319 207l13-13"/>
+    <path class="bike-dark" d="M319 207l13 13"/>
+    <path class="bike-dark" d="M205 220h-18"/>
+
+    <g class="pedal-spin">
+      <circle cx="240" cy="280" r="9" fill="#263238"/>
+      <path class="bike-dark" d="M240 280l28-15"/>
+      <path class="bike-dark" d="M268 265h18"/>
+      <path class="bike-dark" d="M240 280l-23 18"/>
+      <path class="bike-dark" d="M217 298h-18"/>
+    </g>
+  </g>
+
+  <!-- 鹈鹕 -->
+  <g class="body-bob">
+    <!-- 身体 -->
+    <ellipse class="feather outline" cx="244" cy="166" rx="59" ry="48"/>
+    <path d="M201 163c9-31 38-47 67-36 17 7 28 20 32 36-24-9-55-9-99 0z" fill="#ffffff"/>
+    
+    <!-- 尾羽 -->
+    <path class="feather outline" d="M195 174l-43 14 34 12 25-10z"/>
+    <path class="feather outline" d="M198 181l-36 28 42-11 17-14z"/>
+
+    <!-- 翅膀 -->
+    <g class="wing-flap">
+      <path class="wing outline" d="M218 142c-28 7-37 31-27 57 7 17 26 23 42 7 12-12 18-37 7-56-5-7-13-10-22-8z"/>
+      <path class="wing-tip outline" d="M198 190c9 17 21 21 35 14l-16 19c-16 3-27-9-29-25z"/>
+      <path d="M207 157c9 9 14 19 17 32M214 151c10 11 16 25 17 39" fill="none" stroke="#aaa99c" stroke-width="3"/>
+    </g>
+
+    <!-- 脖子 -->
+    <path class="feather outline" d="M266 151c-8-18-8-38 4-56l25 8c-11 18-10 35 1 52z"/>
+    <path d="M272 105c8 10 14 24 12 43" fill="none" stroke="#c9c7b8" stroke-width="5"/>
+
+    <!-- 头部 -->
+    <ellipse class="feather outline" cx="287" cy="83" rx="30" ry="28"/>
+    <path d="M271 61c10-16 30-13 40-1-11-3-25-1-40 1z" fill="#ffffff"/>
+
+    <!-- 眼睛 -->
+    <circle cx="298" cy="78" r="6" fill="#263238"/>
+    <circle cx="300" cy="76" r="2" fill="#ffffff"/>
+
+    <!-- 长喙与喉囊 -->
+    <path class="outline" fill="#efb34d" d="M307 86 Q362 76 409 96 Q365 111 307 103 Q295 98 307 86z"/>
+    <path class="outline" fill="#e89a43" d="M311 101 Q352 108 383 98 Q374 133 342 137 Q319 134 308 112z"/>
+    <path d="M321 111c16 8 32 8 48 1" fill="none" stroke="#bf7135" stroke-width="3"/>
+
+    <!-- 腿 -->
+    <g class="leg-front">
+      <path class="leg" d="M230 199 L238 244 L241 280"/>
+      <path class="foot" d="M241 278l25-3 4 6-27 8z"/>
+    </g>
+    <g class="leg-back">
+      <path class="leg" d="M258 200 L251 244 L240 280"/>
+      <path class="foot" d="M240 278l-25 10-3-6 24-13z"/>
+    </g>
+
+    <!-- 座垫 -->
+    <path class="bike-dark" d="M203 218h35"/>
+    <path class="bike-dark" d="M217 215v-13"/>
+  </g>
+
+  <!-- 草叶 -->
+  <g fill="none" stroke="#4d9a4a" stroke-width="3" stroke-linecap="round">
+    <path d="M70 350l-5-15M78 350l8-17M430 350l-3-18M440 350l10-14M120 350l5-13"/>
+  </g>
+</svg>
+</body>
+</html>

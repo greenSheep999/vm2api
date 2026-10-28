@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>鹈鹕骑自行车</title>
+<style>
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #b9e8f5;
+  }
+
+  svg {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  .pelican-body {
+    animation: bodyBob .65s ease-in-out infinite alternate;
+    transform-box: fill-box;
+    transform-origin: center bottom;
+  }
+
+  .wing {
+    animation: wingFlap .8s ease-in-out infinite alternate;
+    transform-box: fill-box;
+    transform-origin: 80% 25%;
+  }
+
+  .leg-a {
+    animation: legA .65s linear infinite;
+    transform-box: fill-box;
+    transform-origin: 50% 0%;
+  }
+
+  .leg-b {
+    animation: legB .65s linear infinite;
+    transform-box: fill-box;
+    transform-origin: 50% 0%;
+  }
+
+  .wheel-spin {
+    animation: spin 1.2s linear infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+
+  .pedal-spin {
+    animation: spin .65s linear infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+
+  .cloud {
+    animation: drift 24s linear infinite;
+  }
+
+  @keyframes bodyBob {
+    from { transform: translateY(0); }
+    to   { transform: translateY(-5px); }
+  }
+
+  @keyframes wingFlap {
+    from { transform: rotate(2deg); }
+    to   { transform: rotate(-10deg); }
+  }
+
+  @keyframes legA {
+    0%, 100% { transform: rotate(28deg); }
+    50% { transform: rotate(-28deg); }
+  }
+
+  @keyframes legB {
+    0%, 100% { transform: rotate(-28deg); }
+    50% { transform: rotate(28deg); }
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  @keyframes drift {
+    from { transform: translateX(-80px); }
+    to { transform: translateX(1100px); }
+  }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 1000 620" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8bd9ef"/>
+      <stop offset="1" stop-color="#e7f8f5"/>
+    </linearGradient>
+    <linearGradient id="road" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#687b86"/>
+      <stop offset="1" stop-color="#3f4f5b"/>
+    </linearGradient>
+    <linearGradient id="feather" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8fbf2"/>
+      <stop offset="1" stop-color="#cbd9d5"/>
+    </linearGradient>
+    <linearGradient id="beak" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#f4b64f"/>
+      <stop offset="1" stop-color="#e87e38"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1000" height="620" fill="url(#sky)"/>
+
+  <g class="cloud" fill="#fff" opacity=".7">
+    <ellipse cx="120" cy="115" rx="68" ry="23"/>
+    <ellipse cx="175" cy="105" rx="45" ry="33"/>
+    <ellipse cx="220" cy="120" rx="62" ry="22"/>
+  </g>
+  <g class="cloud" opacity=".55" transform="translate(-430 100)">
+    <ellipse cx="120" cy="115" rx="68" ry="23" fill="#fff"/>
+    <ellipse cx="175" cy="105" rx="45" ry="33" fill="#fff"/>
+    <ellipse cx="220" cy="120" rx="62" ry="22" fill="#fff"/>
+  </g>
+
+  <path d="M0 390 Q180 330 350 385 T700 370 T1000 390 L1000 620 L0 620Z"
+        fill="#8bc58e"/>
+  <path d="M0 480 Q240 430 490 470 T1000 460 L1000 620 L0 620Z"
+        fill="url(#road)"/>
+  <path d="M0 545 H1000" stroke="#dce7d6" stroke-width="8" stroke-dasharray="55 35" opacity=".8"/>
+
+  <!-- bicycle -->
+  <g stroke="#263d4a" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <g class="wheel-spin">
+      <circle cx="285" cy="465" r="84" stroke="#263d4a" stroke-width="9"/>
+      <circle cx="285" cy="465" r="7" fill="#263d4a"/>
+      <path d="M285 381V549 M201 465H369 M226 406L344 524 M344 406L226 524"
+            stroke="#78909b" stroke-width="3"/>
+    </g>
+    <g class="wheel-spin">
+      <circle cx="690" cy="465" r="84" stroke="#263d4a" stroke-width="9"/>
+      <circle cx="690" cy="465" r="7" fill="#263d4a"/>
+      <path d="M690 381V549 M606 465H774 M631 406L749 524 M749 406L631 524"
+            stroke="#78909b" stroke-width="3"/>
+    </g>
+
+    <path d="M285 465 L430 465 L520 345 L690 465 L430 465 L520 345"/>
+    <path d="M520 345 L495 292"/>
+    <path d="M480 290 H548"/>
+    <path d="M690 465 L680 333"/>
+    <path d="M680 333 L707 313"/>
+    <path d="M707 313 L733 315"/>
+    <path d="M430 465 L400 405"/>
+    <path d="M400 405 H450"/>
+  </g>
+
+  <!-- crank and pedals -->
+  <g class="pedal-spin" transform="translate(430 465)">
+    <circle r="17" fill="#e6a33a" stroke="#263d4a" stroke-width="5"/>
+    <path d="M0 0 L40 -28" stroke="#263d4a" stroke-width="7"/>
+    <rect x="35" y="-35" width="34" height="10" rx="4" fill="#e6a33a" stroke="#263d4a" stroke-width="4"/>
+    <path d="M0 0 L-34 27" stroke="#263d4a" stroke-width="7"/>
+    <rect x="-69" y="22" width="34" height="10" rx="4" fill="#e6a33a" stroke="#263d4a" stroke-width="4"/>
+  </g>
+
+  <!-- pelican -->
+  <g class="pelican-body">
+    <!-- body -->
+    <ellipse cx="520" cy="274" rx="132" ry="91" fill="url(#feather)" stroke="#526c75" stroke-width="5"/>
+    <path d="M425 278 Q480 230 566 250 Q625 263 650 315 Q590 344 500 333 Q446 326 425 278Z"
+          fill="#d7e5e1"/>
+    <path d="M458 263 Q505 220 584 250" fill="none" stroke="#9fb5b4" stroke-width="7"/>
+
+    <!-- neck -->
+    <path d="M576 245 Q575 190 590 144 Q602 111 635 105
+             Q659 106 662 132 Q633 143 633 174
+             Q634 222 658 270Z"
+          fill="url(#feather)" stroke="#526c75" stroke-width="5"/>
+
+    <!-- head -->
+    <ellipse cx="650" cy="100" rx="57" ry="48" fill="url(#feather)" stroke="#526c75" stroke-width="5"/>
+    <path d="M608 78 Q642 40 686 65" fill="none" stroke="#a8bfbd" stroke-width="9"/>
+    <circle cx="672" cy="91" r="8" fill="#263d4a"/>
+    <circle cx="675" cy="88" r="2.5" fill="#fff"/>
+
+    <!-- beak and throat pouch -->
+    <path d="M615 108 Q550 95 470 118 Q552 139 626 132
+             Q658 127 681 111 Q650 103 615 108Z"
+          fill="url(#beak)" stroke="#9b5d35" stroke-width="5"/>
+    <path d="M615 126 Q559 137 493 124 Q529 185 599 190
+             Q638 181 646 137Z"
+          fill="#f0a84b" stroke="#9b5d35" stroke-width="5"/>
+    <path d="M520 143 Q572 157 618 145" fill="none" stroke="#d77c38" stroke-width="4"/>
+
+    <!-- wing -->
+    <path class="wing"
+          d="M464 223 Q390 238 385 302 Q401 345 457 345
+             Q510 321 548 270 Q520 237 464 223Z"
+          fill="#b8cbc9" stroke="#526c75" stroke-width="5"/>
+    <path d="M410 304 Q457 300 514 257 M421 324 Q465 310 500 276"
+          fill="none" stroke="#8fa6a6" stroke-width="5"/>
+
+    <!-- legs -->
+    <g class="leg-a" stroke="#c87936" stroke-width="9" stroke-linecap="round" fill="none">
+      <path d="M492 330 L468 412 L430 463"/>
+      <path d="M430 463 L398 458 M430 463 L408 476"/>
+    </g>
+    <g class="leg-b" stroke="#c87936" stroke-width="9" stroke-linecap="round" fill="none">
+      <path d="M550 335 L574 412 L610 463"/>
+      <path d="M610 463 L642 458 M610 463 L632 476"/>
+    </g>
+
+    <!-- feather details -->
+    <path d="M474 193 Q520 176 559 194" fill="none" stroke="#fff" stroke-width="8" opacity=".8"/>
+    <path d="M452 286 Q478 302 500 306" fill="none" stroke="#fff" stroke-width="6" opacity=".7"/>
+  </g>
+
+  <!-- small ground shadow -->
+  <ellipse cx="500" cy="556" rx="235" ry="17" fill="#24343b" opacity=".25"/>
+</svg>
+</body>
+</html>

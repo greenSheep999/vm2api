@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>鹈鹕骑自行车</title>
+<style>
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #bde9f5;
+  }
+
+  svg {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    min-height: 560px;
+    background: linear-gradient(#bde9f5 0%, #e9f9fb 72%, #86c98b 72%, #69ad70 100%);
+  }
+
+  .cloud {
+    fill: #fff;
+    opacity: .8;
+  }
+
+  .wheel {
+    fill: none;
+    stroke: #263746;
+    stroke-width: 8;
+  }
+
+  .tire-detail {
+    fill: none;
+    stroke: #86a0ab;
+    stroke-width: 3;
+    stroke-dasharray: 12 12;
+  }
+
+  .frame {
+    fill: none;
+    stroke: #d45d42;
+    stroke-width: 8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .metal {
+    fill: none;
+    stroke: #263746;
+    stroke-width: 6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .pelican-body {
+    fill: #f3eee2;
+    stroke: #543f3b;
+    stroke-width: 5;
+  }
+
+  .wing {
+    fill: #d9e4e2;
+    stroke: #543f3b;
+    stroke-width: 5;
+  }
+
+  .feather {
+    fill: none;
+    stroke: #91a7a8;
+    stroke-width: 4;
+    stroke-linecap: round;
+  }
+
+  .leg {
+    fill: none;
+    stroke: #d58b39;
+    stroke-width: 9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .foot {
+    fill: none;
+    stroke: #b66c2d;
+    stroke-width: 7;
+    stroke-linecap: round;
+  }
+
+  .beak {
+    fill: #e7a845;
+    stroke: #543f3b;
+    stroke-width: 5;
+    stroke-linejoin: round;
+  }
+
+  .pouch {
+    fill: #e58d69;
+    stroke: #543f3b;
+    stroke-width: 5;
+  }
+
+  .eye {
+    fill: #1d2932;
+  }
+
+  .body-bob {
+    animation: bob 1.7s ease-in-out infinite;
+    transform-box: fill-box;
+    transform-origin: center bottom;
+  }
+
+  .wing-flap {
+    animation: flap 1.7s ease-in-out infinite;
+    transform-box: fill-box;
+    transform-origin: 305px 230px;
+  }
+
+  .leg-left {
+    animation: pedalLeft 1.2s linear infinite;
+    transform-box: view-box;
+    transform-origin: 350px 286px;
+  }
+
+  .leg-right {
+    animation: pedalRight 1.2s linear infinite;
+    transform-box: view-box;
+    transform-origin: 350px 286px;
+  }
+
+  @keyframes bob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-7px); }
+  }
+
+  @keyframes flap {
+    0%, 100% { transform: rotate(2deg); }
+    50% { transform: rotate(-5deg); }
+  }
+
+  @keyframes pedalLeft {
+    0% { transform: rotate(0deg); }
+    25% { transform: rotate(20deg); }
+    50% { transform: rotate(0deg); }
+    75% { transform: rotate(-20deg); }
+    100% { transform: rotate(0deg); }
+  }
+
+  @keyframes pedalRight {
+    0% { transform: rotate(180deg); }
+    25% { transform: rotate(160deg); }
+    50% { transform: rotate(180deg); }
+    75% { transform: rotate(200deg); }
+    100% { transform: rotate(180deg); }
+  }
+
+  .spoke-spin {
+    animation: spin 1.2s linear infinite;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 800 560" role="img" aria-label="一只鹈鹕骑自行车的二维动画">
+  <g class="cloud">
+    <path d="M95 110c-22 0-38-13-38-30s16-30 38-30c8-24 32-39 59-39 32 0 58 21 63 49 20 1 36 14 36 30 0 18-18 32-41 32H95z"/>
+    <path d="M585 95c-16 0-28-10-28-23s12-23 28-23c6-19 25-30 45-30 24 0 44 16 48 38 16 1 28 11 28 23 0 14-14 25-32 25H585z"/>
+  </g>
+
+  <path d="M0 428 Q180 405 350 428 T800 420 V560 H0Z" fill="#75b979"/>
+  <path d="M0 456 Q210 430 410 458 T800 446" fill="none" stroke="#a2d28d" stroke-width="7" opacity=".7"/>
+
+  <!-- bicycle wheels -->
+  <g>
+    <circle class="wheel" cx="230" cy="390" r="75"/>
+    <circle class="tire-detail" cx="230" cy="390" r="62"/>
+    <g class="spoke-spin">
+      <path class="metal" d="M230 315v150M155 390h150M177 337l106 106M283 337L177 443"/>
+    </g>
+  </g>
+  <g>
+    <circle class="wheel" cx="555" cy="390" r="75"/>
+    <circle class="tire-detail" cx="555" cy="390" r="62"/>
+    <g class="spoke-spin">
+      <path class="metal" d="M555 315v150M480 390h150M502 337l106 106M608 337L502 443"/>
+    </g>
+  </g>
+
+  <!-- bicycle frame -->
+  <path class="frame" d="M230 390 L326 300 L410 390 L230 390 L365 390 L326 300 L480 300 L555 390"/>
+  <path class="metal" d="M480 300 L500 247"/>
+  <path class="metal" d="M500 247 Q520 235 545 245"/>
+  <path class="metal" d="M313 300 L292 278"/>
+  <path class="metal" d="M275 278h38"/>
+  <path class="metal" d="M410 390v-27"/>
+  <circle cx="410" cy="390" r="13" fill="#263746"/>
+  <g class="spoke-spin">
+    <path class="metal" d="M410 390l30 22M410 390l-29-22"/>
+    <path class="metal" d="M440 412h18M381 368h-18"/>
+  </g>
+
+  <!-- seat -->
+  <path d="M287 274 Q310 263 337 273" fill="none" stroke="#263746" stroke-width="10" stroke-linecap="round"/>
+
+  <!-- pelican animated body -->
+  <g class="body-bob">
+    <!-- body -->
+    <ellipse class="pelican-body" cx="315" cy="238" rx="92" ry="70"/>
+    <!-- tail -->
+    <path class="pelican-body" d="M235 238l-48-25 20 47-25 27 58-12z"/>
+    <!-- wing -->
+    <g class="wing-flap">
+      <path class="wing" d="M278 202 Q338 205 363 242 Q348 293 291 291 Q265 261 278 202z"/>
+      <path class="feather" d="M292 222q30 25 48 54M284 238q31 22 46 46M282 258q25 15 38 30"/>
+    </g>
+
+    <!-- neck -->
+    <path class="pelican-body" d="M278 198 Q255 164 269 119 Q278 92 303 91 Q323 94 322 116 Q315 154 332 193z"/>
+    <!-- head -->
+    <ellipse class="pelican-body" cx="295" cy="91" rx="45" ry="39"/>
+    <!-- crest -->
+    <path class="pelican-body" d="M266 65q-8-27 14-39l8 23q12-28 27-31l-1 30q20-18 30-7l-18 25z"/>
+    <!-- long beak -->
+    <path class="beak" d="M268 92 Q218 79 103 104 Q190 128 270 111z"/>
+    <!-- throat pouch -->
+    <path class="pouch" d="M267 103 Q213 112 151 106 Q180 160 238 154 Q269 145 276 111z"/>
+    <path d="M157 108q48 17 94 5" fill="none" stroke="#bb654f" stroke-width="3"/>
+    <!-- eye -->
+    <circle class="eye" cx="306" cy="82" r="7"/>
+    <circle cx="308" cy="80" r="2" fill="#fff"/>
+    <!-- body accent -->
+    <path d="M246 216q35-19 70-3" fill="none" stroke="#c5d2d0" stroke-width="7" stroke-linecap="round"/>
+  </g>
+
+  <!-- legs and feet over bicycle -->
+  <g class="body-bob">
+    <g class="leg leg-left">
+      <path class="leg" d="M335 280 L367 330 L410 390"/>
+      <path class="foot" d="M410 390l28 20"/>
+    </g>
+    <g class="leg leg-right">
+      <path class="leg" d="M365 280 L340 338 L382 368"/>
+      <path class="foot" d="M382 368l-28-18"/>
+    </g>
+  </g>
+
+  <!-- foreground grass -->
+  <path d="M40 510l12-28 3 28 18-20-8 25 28-14-17 22M680 520l13-32 4 31 19-24-9 28 28-16-16 25"
+        fill="none" stroke="#438b59" stroke-width="6" stroke-linecap="round"/>
+</svg>
+</body>
+</html>

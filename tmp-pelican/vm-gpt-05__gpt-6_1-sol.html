@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>鹈鹕骑自行车</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: #bfe9f5;
+    overflow: hidden;
+  }
+
+  svg {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    min-height: 420px;
+    font-family: sans-serif;
+  }
+
+  .wheel-spin {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: spin 1.1s linear infinite;
+  }
+
+  .pedal-spin {
+    transform-box: fill-box;
+    transform-origin: 360px 350px;
+    animation: spin 1.1s linear infinite;
+  }
+
+  .rider-bob {
+    transform-box: fill-box;
+    transform-origin: center bottom;
+    animation: bob 1.1s ease-in-out infinite;
+  }
+
+  .leg-front {
+    transform-box: fill-box;
+    transform-origin: 350px 285px;
+    animation: legFront 1.1s ease-in-out infinite;
+  }
+
+  .leg-back {
+    transform-box: fill-box;
+    transform-origin: 350px 285px;
+    animation: legBack 1.1s ease-in-out infinite;
+  }
+
+  .wing-flap {
+    transform-box: fill-box;
+    transform-origin: 335px 215px;
+    animation: flap 1.1s ease-in-out infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  @keyframes bob {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-7px); }
+  }
+
+  @keyframes legFront {
+    0%, 100% { transform: rotate(25deg); }
+    50% { transform: rotate(-25deg); }
+  }
+
+  @keyframes legBack {
+    0%, 100% { transform: rotate(-25deg); }
+    50% { transform: rotate(25deg); }
+  }
+
+  @keyframes flap {
+    0%, 100% { transform: rotate(3deg); }
+    50% { transform: rotate(-8deg); }
+  }
+</style>
+</head>
+<body>
+<svg viewBox="0 0 800 500" role="img" aria-label="一只鹈鹕骑自行车的动画">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#a9e1f3"/>
+      <stop offset="1" stop-color="#e8f8f4"/>
+    </linearGradient>
+    <linearGradient id="body" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fffdf4"/>
+      <stop offset="1" stop-color="#d9e6e4"/>
+    </linearGradient>
+    <linearGradient id="beak" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f4a634"/>
+      <stop offset="1" stop-color="#e8782d"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="800" height="500" fill="url(#sky)"/>
+  <path d="M0 390 Q150 350 290 383 T560 375 T800 390 V500 H0Z" fill="#8ed18f"/>
+  <path d="M0 415 Q180 390 370 414 T800 410" fill="none" stroke="#65b877" stroke-width="7"/>
+  <path d="M80 105 q35-28 70 0 q35-25 70 2" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" opacity=".75"/>
+  <path d="M585 135 q30-24 60 0 q30-22 60 2" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" opacity=".7"/>
+
+  <!-- 自行车 -->
+  <g stroke="#344b54" stroke-width="7" fill="none" stroke-linejoin="round">
+    <circle cx="220" cy="365" r="72" fill="#d9f3f5"/>
+    <circle cx="500" cy="365" r="72" fill="#d9f3f5"/>
+
+    <g class="wheel-spin" stroke="#6a969c" stroke-width="3">
+      <path d="M220 365 L220 293 M220 365 L220 437 M220 365 L148 365 M220 365 L292 365"/>
+      <path d="M220 365 L169 314 M220 365 L271 416 M220 365 L169 416 M220 365 L271 314"/>
+    </g>
+    <g class="wheel-spin" stroke="#6a969c" stroke-width="3">
+      <path d="M500 365 L500 293 M500 365 L500 437 M500 365 L428 365 M500 365 L572 365"/>
+      <path d="M500 365 L449 314 M500 365 L551 416 M500 365 L449 416 M500 365 L551 314"/>
+    </g>
+
+    <path d="M220 365 L315 365 L390 275 L500 365 L315 365 L280 285 L390 275"/>
+    <path d="M390 275 L412 235"/>
+    <path d="M400 235 L455 235"/>
+    <path d="M455 235 L470 250"/>
+    <path d="M280 285 L265 265"/>
+    <path d="M250 265 L280 265"/>
+  </g>
+
+  <g class="pedal-spin" stroke="#344b54" stroke-width="6" fill="none">
+    <circle cx="360" cy="350" r="16" fill="#f4bd3d"/>
+    <path d="M360 350 L388 370"/>
+    <path d="M388 370 h24"/>
+    <path d="M360 350 L332 330"/>
+    <path d="M332 330 h-24"/>
+  </g>
+
+  <!-- 鹈鹕 -->
+  <g class="rider-bob">
+    <!-- 身体 -->
+    <ellipse cx="342" cy="231" rx="83" ry="72" fill="url(#body)" stroke="#52666b" stroke-width="4"/>
+    <path d="M292 220 Q330 178 389 207 Q407 225 398 252 Q362 273 315 262Z"
+          fill="#c9d9d8" opacity=".8"/>
+
+    <!-- 翅膀 -->
+    <g class="wing-flap">
+      <path d="M323 202 Q267 212 252 260 Q284 275 328 244 Q345 227 339 210Z"
+            fill="#b8ccce" stroke="#52666b" stroke-width="4"/>
+      <path d="M274 251 Q302 244 326 218" fill="none" stroke="#8ca9ad" stroke-width="4"/>
+      <path d="M280 260 Q310 250 333 225" fill="none" stroke="#8ca9ad" stroke-width="3"/>
+    </g>
+
+    <!-- 脖子 -->
+    <path d="M380 215 Q399 177 392 135 L426 130 Q438 184 416 225Z"
+          fill="#f4f1df" stroke="#52666b" stroke-width="4"/>
+
+    <!-- 头部 -->
+    <ellipse cx="411" cy="111" rx="43" ry="39" fill="#fffdf2" stroke="#52666b" stroke-width="4"/>
+    <circle cx="427" cy="101" r="7" fill="#202d32"/>
+    <circle cx="429" cy="99" r="2.5" fill="#fff"/>
+
+    <!-- 长喙与喉囊 -->
+    <path d="M394 119 Q453 116 548 137 Q555 142 548 148 Q469 159 397 139Z"
+          fill="url(#beak)" stroke="#9b5c2b" stroke-width="4"/>
+    <path d="M402 137 Q462 151 535 145 Q517 204 452 196 Q413 184 402 137Z"
+          fill="#f3a34c" stroke="#9b5c2b" stroke-width="4"/>
+    <path d="M418 151 Q467 171 516 158" fill="none" stroke="#d47735" stroke-width="3"/>
+
+    <!-- 腿 -->
+    <g class="leg-front" fill="none" stroke="#d9892e" stroke-width="8" stroke-linecap="round">
+      <path d="M334 278 L345 320 L360 350"/>
+      <path d="M360 350 l-19 8 M360 350 l20 7"/>
+    </g>
+    <g class="leg-back" fill="none" stroke="#c87528" stroke-width="8" stroke-linecap="round">
+      <path d="M365 278 L350 320 L360 350"/>
+      <path d="M360 350 l-19 8 M360 350 l20 7"/>
+    </g>
+
+    <!-- 尾羽 -->
+    <path d="M269 240 Q232 232 220 250 Q246 263 279 260Z"
+          fill="#d3e1df" stroke="#52666b" stroke-width="4"/>
+  </g>
+
+  <text x="32" y=" fifty" font-size="1"> </text>
+  <path d="M40 455 Q100 440 160 455 T280 455" fill="none" stroke="#4eaa69" stroke-width="4"/>
+</svg>
+</body>
+</html>
