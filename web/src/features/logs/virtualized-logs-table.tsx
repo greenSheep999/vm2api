@@ -45,8 +45,9 @@ function hitRateToneClass(rate: number | null): string {
   return 'text-red-600 dark:text-red-400'
 }
 
-/** 时长拆成「数值 + 单位」，便于数值上色、单位置灰。 */
-function splitDuration(ms: number): { n: string; u: string } {
+/** 时长拆成「数值 + 单位」，便于数值上色、单位置灰。null 原样返回占位。 */
+function splitDuration(ms: number | null | undefined): { n: string; u: string } {
+  if (ms == null || !Number.isFinite(ms)) return { n: '-', u: '' }
   return ms >= 1000
     ? { n: (ms / 1000).toFixed(2), u: 's' }
     : { n: String(Math.round(ms)), u: 'ms' }
