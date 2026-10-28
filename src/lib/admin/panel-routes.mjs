@@ -5208,16 +5208,18 @@ export function createPanelHandler(ctx) {
         fs.writeFileSync(autoSchedPath, JSON.stringify(next, null, 2))
         return next
       }
-      // 读每槽的额度使用率（vm.codex.extra）
+      // 读每槽的额度使用率（summary 里的 codex_usage.limits）
       const autoSchedQuotaOf = (vm) => {
-        const extra = (vm && vm.codex && vm.codex.extra) || {}
-        const pick = (k) => {
-          const v = Number(extra[k])
-          return Number.isFinite(v) ? v : null
+        const usage = (vm && vm.codex_usage) || {}
+        const limits = usage.limits || {}
+        const snapshot = usage.snapshot || {}
+        const num = (v) => {
+          const n = Number(v)
+          return v == null || v === '' || !Number.isFinite(n) ? null : n
         }
         return {
-          used_5h: pick('codex_5h_used_percent') ?? pick('codex_primary_used_percent'),
-          used_7d: pick('codex_7d_used_percent') ?? pick('codex_secondary_used_percent'),
+          used_5h: num(limits.used_5h_percent) ?? num(snapshot.primary_used_percent),
+          used_7d: num(limits.used_7d_percent) ?? num(snapshot.secondary_used_percent),
         }
       }
       // 分档：TTFT → 基础档；流量超限降一档；额度超限直接压到最低
