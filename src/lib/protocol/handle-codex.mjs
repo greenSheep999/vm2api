@@ -756,7 +756,9 @@ export async function handleCodexProtocol({
           // 槽位级开关：transport.upstream === 'ws' 时走出站 WebSocket。
           // WS 复用连接 + previous_response_id，实测缓存命中率和 TTFT 都更好。
           const { wsTransportEnabled, streamCodexWsDirect } = await import('../transport/codex-ws-direct.mjs')
-          if (wsTransportEnabled(args?.exec?.vm || vm, routing)) {
+          // 只认 hop 参数里的槽位对象：这个闭包在 handleCodexProtocol 里定义，
+          // 外面的 `vm` 是别的块作用域变量，直接引用会 ReferenceError → 500。
+          if (wsTransportEnabled(args?.exec?.vm || null, routing)) {
             return streamCodexWsDirect(args)
           }
           const { streamCodexKernelDirect } = await import('../transport/codex-kernel-direct.mjs')
