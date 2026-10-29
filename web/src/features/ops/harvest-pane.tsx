@@ -464,7 +464,6 @@ export function HarvestPane() {
                           : tier === '降智'
                             ? 'border-rose-300/60 bg-rose-50/50 dark:border-rose-900 dark:bg-rose-950/20'
                             : 'border-border bg-muted/30',
-                        running === key || probing === key ? 'ring-1 ring-primary/40' : '',
                       )}
                     >
                       <span className='flex w-full items-center gap-2'>
@@ -506,6 +505,23 @@ export function HarvestPane() {
                 })}
               </div>
 
+              {batchBusy?.vmId === a.id ? (
+                <div className='mt-2 flex items-center gap-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2'>
+                  <span className='shrink-0 text-[11px] font-medium text-primary'>
+                    {batchBusy.kind === 'ticket' ? '打票' : batchBusy.kind === 'probe' ? '探针' : batchBusy.kind === 'borrow' ? '借票' : '能力题'}
+                    进行中
+                  </span>
+                  <span className='shrink-0 font-mono text-[11px]'>{batchBusy.current}</span>
+                  <Progress
+                    value={Math.round((batchBusy.done / Math.max(1, batchBusy.total)) * 100)}
+                    className='h-2 flex-1'
+                  />
+                  <span className='shrink-0 font-mono text-[11px] text-muted-foreground'>
+                    {batchBusy.done}/{batchBusy.total}
+                  </span>
+                </div>
+              ) : null}
+
               {/* 统一操作栏：作用于勾选的模型（没勾选 = 全部） */}
               <div className='mt-2 flex flex-wrap items-center gap-1.5 border-t pt-2'>
                 <span className='mr-1 text-[10px] text-muted-foreground'>
@@ -527,22 +543,6 @@ export function HarvestPane() {
                   onClick={() => void runBatch(a.id, 'candy')}>
                   <Brain className='mr-1.5 h-3.5 w-3.5' />能力题
                 </Button>
-                {batchBusy?.vmId === a.id ? (
-                  <span className='ml-auto flex items-center gap-2 text-[10px]'>
-                    <span className='text-muted-foreground'>
-                      {batchBusy.kind === 'ticket' ? '打票' : batchBusy.kind === 'probe' ? '探针' : batchBusy.kind === 'borrow' ? '借票' : '能力题'}
-                      中
-                    </span>
-                    <span className='font-mono text-foreground'>{batchBusy.current}</span>
-                    <Progress
-                      value={Math.round((batchBusy.done / Math.max(1, batchBusy.total)) * 100)}
-                      className='h-1 w-24'
-                    />
-                    <span className='font-mono text-muted-foreground'>
-                      {batchBusy.done}/{batchBusy.total}
-                    </span>
-                  </span>
-                ) : null}
               </div>
             </div>
           ))}
