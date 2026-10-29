@@ -145,14 +145,17 @@ function CardBody({ vm, accounts }: { vm: Vm; accounts?: UsageAccountRow[] }) {
       <VmMemoryBlock vm={vm} />
 
       {/* 按 provider 显示专属设置：GPT 有门票与上游传输，Claude 有缓存档位。 */}
-      {isCodexVm(vm) ? (
-        <div className='space-y-2'>
-          <UpstreamTransportCard vm={vm} />
-          <CodexTicketMiniCard vm={vm} />
-        </div>
-      ) : (
-        <ClaudeCacheMiniCard vm={vm} />
-      )}
+      <section className='min-w-0 space-y-2 rounded-lg border px-3 py-2.5'>
+        {isCodexVm(vm) ? (
+          <>
+            <UpstreamTransportCard vm={vm} />
+            <div className='h-px bg-border' />
+            <CodexTicketMiniCard vm={vm} />
+          </>
+        ) : (
+          <ClaudeCacheMiniCard vm={vm} />
+        )}
+      </section>
 
       <div className='grid gap-2 sm:grid-cols-2'>
         <Section title='今日'>

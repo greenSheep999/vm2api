@@ -1,9 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import type { Vm } from '@/types/panel-vm'
 import { api } from '@/lib/api'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
-import { TONE_CLASS, ticketChip, continuityChip } from '@/lib/ticket-state'
+import { TONE_CLASS, continuityChip, ticketChip } from '@/lib/ticket-state'
 
 type HarvestTicket = {
   model: string
@@ -15,8 +14,8 @@ type HarvestTicket = {
 type HarvestAccount = { id: string; models: HarvestTicket[] }
 
 /**
- * 槽位卡里的门票小卡：只显示这个槽位每个模型的票与续接结论。
- * 数据来自打票概览，和打票页同源，避免两处显示不一致。
+ * 槽位卡里的门票摘要：只给一行计数（满血 N / 降智 N / 未探针 N）。
+ * 每个模型的明细在打票页看，小卡里铺开太挤。
  */
 export function CodexTicketMiniCard({ vm }: { vm: Vm }) {
   const snap = useQuery({
@@ -27,69 +26,50 @@ export function CodexTicketMiniCard({ vm }: { vm: Vm }) {
   const account = (snap.data?.accounts || []).find((a) => a.id === vm.id)
   const models = account?.models || []
 
+  const tally = { healthy: 0, degraded: 0, unknown: 0 }
+  for (const t of models) {
+    const chip = continuityChip({
+      model: t.model,
+      ticketVerdict: t.verdict,
+      probeVerdict: t.probe_verdict,
+    })
+    if (chip.tone === 'ok') tally.healthy += 1
+    else if (chip.tone === 'bad') tally.degraded += 1
+    else tally.unknown += 1
+  }
+
   return (
-    <Card>
-      <CardHeader className='pb-1.5'>
-        <CardTitle className='text-sm'>门票</CardTitle>
-      </CardHeader>
-      <CardContent className='pt-0'>
-        {models.length === 0 ? (
-          <p className='text-[11px] text-muted-foreground'>还没有打票记录</p>
-        ) : (
-          models.map((t, i) => {
-            const chips = t.verdict
-              ? [
-                  ticketChip({ ticketVerdict: t.verdict, ticketLen: t.len, probeVerdict: t.probe_verdict, model: t.model }),
-                  continuityChip({ ticketVerdict: t.verdict, probeVerdict: t.probe_verdict, model: t.model }),
-                ]
-              : [{ label: '未打票', tone: 'muted' as const, hint: '还没打过票' }]
-            return (
-              <div
-                key={t.model}
-                className={cn(
-                  'flex items-center justify-between gap-3 py-1 text-[11px]',
-                  i > 0 && 'border-t border-border/50',
-                )}
-              >
-                <span className='truncate font-mono leading-none'>{t.model}</span>
-                <span className='flex shrink-0 items-center gap-1'>
-                  {chips.map((chip) => (
-                    <span
-                      key={chip.label}
-                      title={chip.hint}
-                      className={cn('rounded border px-1 text-[10px]', TONE_CLASS[chip.tone])}
-                    >
-                      {chip.label}
-                    </span>
-                  ))}
-                </span>
-              </div>
-            )
-          })
-        )}
-      </CardContent>
-    </Card>
+    <div className='flex items-center justify-between gap-3 text-xs'>
+      <span className='font-medium'>门票</span>
+      {models.length === 0 ? (
+        <span className='text-[11px] text-muted-foreground'>未打票</span>
+      ) : (
+        <span className='flex items-center gap-1.5 text-[11px]'>
+          {tally.healthy ? (
+            <span className={cn('rounded border px-1', TONE_CLASS.ok)}>满血 {tally.healthy}</span>
+          ) : null}
+          {tally.degraded ? (
+            <span className={cn('rounded border px-1', TONE_CLASS.bad)}>降智 {tally.degraded}</span>
+          ) : null}
+          {tally.unknown ? (
+            <span className={cn('rounded border px-1', TONE_CLASS.muted)}>未验 {tally.unknown}</span>
+          ) : null}
+        </span>
+      )}
+    </div>
   )
 }
 
-/** Claude 槽位卡里的缓存小卡：显示缓存档位与今日缓存量，不做能力判定。 */
+/** Claude 槽位：只显示缓存档位一行。 */
 export function ClaudeCacheMiniCard({ vm }: { vm: Vm }) {
   const claude = (vm as unknown as { claude?: { cache_ttl?: string; extra?: { cache_ttl?: string } } })?.claude
-  const ttl = claude?.cache_ttl || claude?.extra?.cache_ttl || '默认（5m）'
+  const ttl = claude?.cache_ttl || claude?.extra?.cache_ttl || '默认 5m'
   return (
-    <Card>
-      <CardHeader className='pb-2'>
-        <CardTitle className='text-sm'>缓存</CardTitle>
-      </CardHeader>
-      <CardContent className='space-y-1 text-[11px] text-muted-foreground'>
-        <div className='flex items-center justify-between'>
-          <span>缓存档位</span>
-          <span className='font-mono text-foreground'>{ttl}</span>
-        </div>
-        <p className='text-[10px]'>
-          Claude 走隐式缓存：上游只回「缓存读取」，不单独上报写入量。
-        </p>
-      </CardContent>
-    </Card>
+    <div className='flex items-center justify-between gap-3 text-xs'>
+      <span className='font-medium'>缓存档位</span>
+      <span className='font-mono text-[11px] text-muted-foreground'>{ttl}</span>
+    </div>
   )
 }
+
+export { ticketChip }
