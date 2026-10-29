@@ -323,6 +323,21 @@ function execFor(projectRoot, vm) {
   }
 }
 
+/**
+ * 统一的 SSE 收尾：正常结束和异常结束都必须给对端一个明确的终止标记。
+ * new-api 之类的兼容网关把「连接关闭但没有 [DONE]」判成 EOF/截断，
+ * 客户端会一直重连。KIN_CODEX_SSE_DONE=0 可关闭。
+ */
+function finishCodexSse(res, { stream, protocol }) {
+  try {
+    if (!res.headersSent) return res.end()
+    if (stream && protocol === 'openai.responses' && process.env.KIN_CODEX_SSE_DONE !== '0') {
+      res.write('data: [DONE]\n\n')
+    }
+  } catch {}
+  return res.end()
+}
+
 export function isRetryableCodexTransport(result) {
   if (!result || result.ok === true) return false
   if (result.committed === true) return false
@@ -501,7 +516,10 @@ async function admitCodexCandidate(projectRoot, req, opts, { deadline, signal })
     if (
       overflowAllowed &&
       !overflowTried &&
-      (picked.error === 'quota_exhausted' || picked.error === 'capacity_unavailable') &&
+      (picked.error === 'quota_exhausted' ||
+        picked.error === 'operator_gate' ||
+        picked.error === 'upstream_cooling' ||
+        picked.error === 'capacity_unavailable') &&
       picked.pin == null
     ) {
       overflowTried = true
@@ -1064,19 +1082,7 @@ export async function handleCodexProtocol({
             return json(res, 200, body)
           }
           if (!res.headersSent) writeSSEHeaders(res)
-          // new-api 等 OpenAI 兼容网关把「没有 [DONE]」当 EOF，判成流被截断，
-          // 客户端随即报 stream closed before response.completed 并重连。
-          // 上游 Responses 本来不发 [DONE]，这里补一个（可用 KIN_CODEX_SSE_DONE=0 关闭）。
-          if (
-            stream &&
-            protocol === 'openai.responses' &&
-            process.env.KIN_CODEX_SSE_DONE !== '0'
-          ) {
-            try {
-              res.write('data: [DONE]\n\n')
-            } catch {}
-          }
-          return res.end()
+          return finishCodexSse(res, { stream, protocol })
         }
         reportOpenAIAttempt(vm.id, attemptKind, result?.ttftMs ?? null)
         const failureHold = codexFailureHold(result)
@@ -1116,7 +1122,8 @@ export async function handleCodexProtocol({
           stats.errors++
           logBag.error_code = result?.body?.error?.code || 'codex_upstream'
           logBag.upstream_status = result?.status || 0
-          return res.end()
+          // 异常收尾同样要补终止标记：头已发出时我们写得进去，不写对端只能看到裸 EOF。
+          return finishCodexSse(res, { stream, protocol })
         }
         if (isCodexFailoverError(result)) {
           pickOpts.excluded.add(vm.id)
@@ -1226,8 +1233,7 @@ function rejectCodexAdmission({ res, json, stats, logBag, picked, model }) {
     })
   }
   if (picked.error === 'quota_exhausted') {
-    // 额度打满是「我们主动拦下」，对端网关不该重试：
-    // 503 在 new-api 语义里是可重试，会触发客户端反复重连。用 429 + retry-after。
+    // 真额度窗口打满：重试无意义，429 + retry-after 告诉对端什么时候再来。
     const waitMs = Number(picked.retryAt) - Date.now()
     if (Number.isFinite(waitMs) && waitMs > 0) {
       res.setHeader?.('retry-after', String(Math.max(1, Math.ceil(waitMs / 1000))))
@@ -1237,6 +1243,34 @@ function rejectCodexAdmission({ res, json, stats, logBag, picked, model }) {
         type: 'rate_limit_error',
         code: 'quota_exhausted',
         message: 'OpenAI 号池额度已耗尽，请稍后再试',
+      },
+    })
+  }
+  if (picked.error === 'operator_gate') {
+    // 运营软闸门（留量/手动停）：我们主动拦的，不该让对端反复重试。
+    const waitMs = Number(picked.retryAt) - Date.now()
+    if (Number.isFinite(waitMs) && waitMs > 0) {
+      res.setHeader?.('retry-after', String(Math.max(1, Math.ceil(waitMs / 1000))))
+    }
+    return json(res, 429, {
+      error: {
+        type: 'rate_limit_error',
+        code: 'operator_gate',
+        message: 'OpenAI 号池当前按留量策略暂停服务，请稍后再试',
+      },
+    })
+  }
+  if (picked.error === 'upstream_cooling') {
+    // 上游 429 冷却：换号可解，但对端此刻无号可换，用可重试状态码 + retry-after。
+    const waitMs = Number(picked.retryAt) - Date.now()
+    if (Number.isFinite(waitMs) && waitMs > 0) {
+      res.setHeader?.('retry-after', String(Math.max(1, Math.ceil(waitMs / 1000))))
+    }
+    return json(res, 503, {
+      error: {
+        type: 'api_error',
+        code: 'upstream_cooling',
+        message: 'OpenAI 号池正在冷却，请稍后重试',
       },
     })
   }

@@ -182,7 +182,12 @@ export function codexAccountStatus(vm, now = Date.now(), policy = null) {
   if (status === 'dead' || status === 'error') return 'error'
   if (!vm.has_token) return 'error'
   if (openAIAccountHold(vm.id, now)) return 'cooldown'
-  if (isCodexSlotParked(vm, now, policy) || codexQuotaWindowReason(vm, now)) return 'quota_exhausted'
+  // 三种语义必须分开，否则对外只能回同一个状态码，客户端行为就会错：
+  //   quota_exhausted —— 真额度窗口打满（重试无意义）
+  //   parked_gate      —— 运营软闸门 / 留量策略（我们自己拦的）
+  //   cooldown         —— 上游 429 冷却（换号可解）
+  if (codexQuotaWindowReason(vm, now)) return 'quota_exhausted'
+  if (isCodexSlotParked(vm, now, policy)) return 'parked_gate'
   return 'normal'
 }
 
@@ -303,10 +308,24 @@ export function orderCodexSessionSlots(
   })
   if (!ordered.ids.length) {
     const statuses = ids.map((id) => codexAccountStatus(byId.get(id), now, policy))
-    const quotaExhausted = statuses.length > 0 && statuses.every((status) => status === 'quota_exhausted')
-    const retryAt = quotaExhausted ? null : rpmRetryAt(candidates, now) || holdRetryAt(candidates, now)
+    const allQuota = statuses.length > 0 && statuses.every((status) => status === 'quota_exhausted')
+    const allParked = statuses.length > 0 && statuses.every((status) => status === 'parked_gate')
+    const allCooling = statuses.length > 0 && statuses.every((status) => status === 'cooldown')
+    // 混合时按「最可能需要等待」的原因归类，便于对端决定要不要重试。
+    const reason = allQuota
+      ? 'quota_exhausted'
+      : allParked
+        ? 'operator_gate'
+        : allCooling
+          ? 'upstream_cooling'
+          : statuses.includes('quota_exhausted')
+            ? 'quota_exhausted'
+            : statuses.includes('parked_gate')
+              ? 'operator_gate'
+              : 'capacity_unavailable'
+    const retryAt = allQuota ? null : rpmRetryAt(candidates, now) || holdRetryAt(candidates, now)
     return {
-      error: quotaExhausted ? 'quota_exhausted' : 'capacity_unavailable',
+      error: reason,
       retryAt,
       ids: [],
       ready: [],
