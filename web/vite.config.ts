@@ -59,6 +59,22 @@ function previewOpsAcl() {
           // 降智检测桩：题库 / 任务 / 记录 / 结果（后端接口未上线时让界面可验）。
           if (hitIq && req.method === 'GET') {
             const now = Date.now()
+            const PROMPTS: Record<string, string> = {
+              candy: '在一个黑色的袋子里放有三种口味的糖果，每种糖果有两种不同的形状（圆形和五角星形）…最少取出多少个糖果才能保证手中同时拥有不同形状的苹果味和桃子味的糖？',
+              'pelican-bike': '创建一个 HTML，内容是用 SVG 绘制一个鹈鹕骑自行车的 2D 动画。所有样式与脚本内联。',
+              'polar-bear-bike': '创建一个 HTML，用 SVG 绘制一只北极熊骑自行车的 2D 动画：体型圆润、白色毛发、黑鼻子…',
+              'ultraman-moto': '创建一个 HTML，用 SVG 绘制奥特曼骑摩托车的 2D 动画：银红配色、头顶有鳍状冠…',
+              'octopus-drums': '创建一个 HTML，用 SVG 绘制一只章鱼打架子鼓的 2D 动画：8 条触手各持鼓棒…',
+              'giraffe-skate': '创建一个 HTML，用 SVG 绘制一只长颈鹿踩滑板的 2D 动画：脖子修长、带棕色斑块…',
+              'astro-cat-fishing': '创建一个 HTML，用 SVG 绘制一只穿宇航服的猫在月球上钓鱼的 2D 动画…',
+              'analog-clock': '创建一个 HTML，用 SVG 绘制一个模拟时钟：表盘刻度、时针分针秒针，读取本地时间实时走针…',
+              'solar-system': '创建一个 HTML，用 SVG 绘制太阳系动画：六颗行星沿轨道公转，周期按真实比例缩放…',
+              'bouncing-balls': '创建一个 HTML，用 Canvas 或 SVG 实现弹跳小球物理模拟：8 个球受重力下落…',
+              'gear-train': '创建一个 HTML，用 SVG 绘制一组相互啮合的齿轮传动动画：至少 4 个齿轮…',
+              'city-parallax': '创建一个 HTML，用 SVG 绘制横向无限滚动的城市夜景：至少三层视差…',
+              'stroke-order': '创建一个 HTML，用 SVG 路径动画演示汉字「永」的书写过程：按正确笔顺逐笔书写，共 5 笔…',
+              poker: '一副牌37张，背面蓝红两色翻前可见；花色黑桃红心梅花翻开可知…最少翻多少张才能保证…',
+            }
             const qs = [
               ['candy', '糖果计数', 'numeric', 'numeric_pass', '21'],
               ['pelican-bike', '鹈鹕骑自行车', 'image', 'structure', null],
@@ -75,7 +91,14 @@ function previewOpsAcl() {
               ['stroke-order', '汉字笔顺书写动画', 'image', 'structure', null],
               ['poker', '扑克翻牌', 'numeric', 'record_only', null],
             ].map(([id, title, kind, rule, expected]) => ({
-              id, title, kind, prompt: '…题面…', judge_rule: rule, expected, auto_support: rule === 'numeric_pass' ? 1 : 0, builtin: 1,
+              id,
+              title,
+              kind,
+              prompt: PROMPTS[String(id)] || '',
+              judge_rule: rule,
+              expected,
+              auto_support: rule === 'numeric_pass' ? 1 : 0,
+              builtin: 1,
             }))
             let data: any = { items: qs }
             if (url.includes('/iq/tasks')) {

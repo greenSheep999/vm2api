@@ -281,9 +281,10 @@ function IqWorkbench({ presetVm = null }: { presetVm?: string | null }) {
   )
 }
 
-/** 题库：内置题只读，自定义题可增删；每题标明判定规则。 */
+/** 题库：内置题只读，自定义题可增删；每题标明判定规则，题面可展开。 */
 function IqQuestions() {
   const qc = useQueryClient()
+  const [expanded, setExpanded] = useState<string | null>(null)
   const questions = useQuery({
     queryKey: ['iq-questions'],
     queryFn: () => api<{ items: IqQuestion[] }>('/api/panel/ops/iq/questions'),
@@ -358,7 +359,16 @@ function IqQuestions() {
                   </span>
                   {q.builtin === 1 ? <span className='text-[10px] text-muted-foreground'>内置</span> : null}
                 </div>
-                <div className='mt-0.5 truncate text-muted-foreground'>{q.prompt}</div>
+                <div
+                  className={cn(
+                    'mt-0.5 cursor-pointer whitespace-pre-wrap text-muted-foreground',
+                    expanded === q.id ? '' : 'line-clamp-2',
+                  )}
+                  onClick={() => setExpanded(expanded === q.id ? null : q.id)}
+                  title={expanded === q.id ? '点击收起' : '点击展开完整题面'}
+                >
+                  {q.prompt}
+                </div>
               </div>
               {q.builtin === 1 ? null : (
                 <Button size='sm' variant='ghost' className='h-6 px-1.5 text-[10px]' onClick={() => void remove(q.id)}>
