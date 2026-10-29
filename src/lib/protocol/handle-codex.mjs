@@ -613,7 +613,7 @@ export async function handleCodexProtocol({
   const allowed = isCodexProtocolAllowed(protocol, { codex })
   if (!allowed.ok) {
     stats.errors++
-    logBag.via = 'codex-kernel'
+    logBag.via = directMode ? 'codex-direct' : 'codex-kernel'
     logBag.error_code = allowed.code
     return json(res, 400, {
       error: {
@@ -927,6 +927,9 @@ export async function handleCodexProtocol({
             },
           })
         let result = await runHop()
+        if (directMode && result?.effective_headers) {
+          logBag.outbound_headers = redactHeaders(result.effective_headers)
+        }
         // A transient seat-local failure gets the same account up to N retries
         // before the request spends a switch. 401/403/429 are never retried here:
         // they are credential/account state and must move to another seat.

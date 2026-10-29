@@ -430,9 +430,13 @@ export async function streamCodexKernelDirect(args = {}) {
     }
   }
 
+  const effective = buildHeaders(args, credential.access)
+  delete effective.Authorization
+  delete effective.Cookie
   return {
     ...result,
     via: 'codex-direct',
+    effective_headers: effective,
     injected_ticket: Boolean(args?.routing?.codex?.ticket?.inject === true && ticketFor(args)?.state),
     // 门票就在响应头里，原样带出给上层采集与判定。
     headers: result.headers || {},
