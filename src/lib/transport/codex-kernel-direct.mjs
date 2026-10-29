@@ -236,7 +236,7 @@ function buildHeaders(args, token) {
 }
 
 /** 发一次上游请求，按 SSE 逐行回调。 */
-async function sendUpstream({ body, headers, proxyUrl, timeoutMs, idleTimeoutMs, onLine, signal }) {
+async function sendUpstream({ body, headers, proxyUrl, timeoutMs, idleTimeoutMs, onLine, signal, compact = false }) {
   const dialIp = await resolveIPv4().catch(() => '')
   return new Promise((resolve) => {
     const payload = Buffer.from(JSON.stringify(body), 'utf8')
@@ -274,7 +274,8 @@ async function sendUpstream({ body, headers, proxyUrl, timeoutMs, idleTimeoutMs,
         servername: UPSTREAM_HOST,
         port: 443,
         method: 'POST',
-        path: args?.compact ? `${UPSTREAM_PATH}/compact` : UPSTREAM_PATH,
+        // compact 端点用上游同名路径；参数从这个函数的入参来，不能用不存在的 args。
+        path: compact ? `${UPSTREAM_PATH}/compact` : UPSTREAM_PATH,
         agent,
         headers,
         timeout: timeoutMs || 600_000,
@@ -478,6 +479,7 @@ export async function streamCodexKernelDirect(args = {}) {
     idleTimeoutMs: args.idleTimeoutMs,
     onLine,
     signal: args.signal,
+    compact: args.compact === true,
   })
 
   // 401 时用 refresh_token 换一次，再重试一发。
@@ -494,6 +496,7 @@ export async function streamCodexKernelDirect(args = {}) {
         idleTimeoutMs: args.idleTimeoutMs,
         onLine,
         signal: args.signal,
+        compact: args.compact === true,
       })
     }
   }
