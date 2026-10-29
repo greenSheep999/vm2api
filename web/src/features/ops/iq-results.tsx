@@ -107,7 +107,16 @@ function wrapArtifact(artifact: string) {
 
 function renderArtifact(row: ResultRow) {
   const artifact = String(row.artifact || '')
-  if (row.question_kind === 'image' || /<svg[\s>]/i.test(artifact)) {
+  const looksLikeMarkup = /<svg[\s>]|<html[\s>]|<canvas[\s>]/i.test(artifact)
+  // 历史记录里存过原始 SSE（修 bug 之前），不能当作品渲染，否则卡片里全是事件流。
+  if (row.question_kind === 'image' && !looksLikeMarkup) {
+    return (
+      <div className='flex h-full items-center justify-center px-3 text-center text-[11px] text-muted-foreground'>
+        这条记录没有保存到可用产物（旧版本只存了流片段）
+      </div>
+    )
+  }
+  if (looksLikeMarkup) {
     return (
       <iframe
         title={row.id}
@@ -143,20 +152,25 @@ export function IqResultsPage() {
   const [kind, setKind] = useState<string>('all')
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [keyId, setKeyId] = useState<string>('all')
+  const [page, setPage] = useState(0)
+  const PAGE_SIZE = 24
 
   const q = useQuery({
     queryKey: ['iq-results', kind],
     queryFn: () =>
       api<ResultsPayload>(
-        `/api/panel/ops/iq/results?limit=300${kind === 'all' ? '' : `&kind=${encodeURIComponent(kind)}`}`,
+        `/api/panel/ops/iq/results?limit=240${kind === 'all' ? '' : `&kind=${encodeURIComponent(kind)}`}`,
       ),
     refetchInterval: 30_000,
   })
 
   const rows = q.data?.items || []
   const keys = q.data?.keys || []
+  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
+  const safePage = Math.min(page, pageCount - 1)
+  const pageRows = rows.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE)
 
-  const filtered = rows.filter((row) => {
+  const filtered = pageRows.filter((row) => {
     if (keyId === 'all') return true
     return row.keys.some((k) => k.id === keyId)
   })
@@ -256,6 +270,27 @@ export function IqResultsPage() {
 
           <div className='flex items-center gap-2 text-[11px] text-muted-foreground'>
             <span>上次刷新 {q.dataUpdatedAt ? fmt(new Date(q.dataUpdatedAt).toISOString()) : '—'}</span>
+            <span className='text-[11px]'>
+              第 {safePage + 1} / {pageCount} 页 · 共 {rows.length} 条
+            </span>
+            <Button
+              size='sm'
+              variant='outline'
+              className='h-7 px-2 text-[11px]'
+              disabled={safePage === 0}
+              onClick={() => setPage(Math.max(0, safePage - 1))}
+            >
+              上一页
+            </Button>
+            <Button
+              size='sm'
+              variant='outline'
+              className='h-7 px-2 text-[11px]'
+              disabled={safePage >= pageCount - 1}
+              onClick={() => setPage(Math.min(pageCount - 1, safePage + 1))}
+            >
+              下一页
+            </Button>
             <Button
               size='sm'
               variant='outline'

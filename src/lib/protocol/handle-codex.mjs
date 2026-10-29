@@ -1211,8 +1211,18 @@ function rejectCodexAdmission({ res, json, stats, logBag, picked, model }) {
     })
   }
   if (picked.error === 'quota_exhausted') {
-    return json(res, 503, {
-      error: { type: 'api_error', code: 'quota_exhausted', message: 'OpenAI 号池额度已耗尽' },
+    // 额度打满是「我们主动拦下」，对端网关不该重试：
+    // 503 在 new-api 语义里是可重试，会触发客户端反复重连。用 429 + retry-after。
+    const waitMs = Number(picked.retryAt) - Date.now()
+    if (Number.isFinite(waitMs) && waitMs > 0) {
+      res.setHeader?.('retry-after', String(Math.max(1, Math.ceil(waitMs / 1000))))
+    }
+    return json(res, 429, {
+      error: {
+        type: 'rate_limit_error',
+        code: 'quota_exhausted',
+        message: 'OpenAI 号池额度已耗尽，请稍后再试',
+      },
     })
   }
   return json(res, 503, {
