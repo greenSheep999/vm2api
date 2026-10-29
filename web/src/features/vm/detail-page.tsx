@@ -522,7 +522,8 @@ function VmDetailBody({
               <TabsTrigger value='test'>测试</TabsTrigger>
             ) : null}
             {tabs.includes('codex') ? (
-              <TabsTrigger value='codex'>Codex</TabsTrigger>
+              // 页签名跟平台标签保持一致：界面上的槽位徽标写的是 GPT，这里也写 GPT。
+              <TabsTrigger value='codex'>GPT</TabsTrigger>
             ) : null}
             {tabs.includes('ops') ? (
               <TabsTrigger value='ops'>运维</TabsTrigger>

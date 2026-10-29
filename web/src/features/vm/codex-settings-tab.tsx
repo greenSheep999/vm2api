@@ -135,6 +135,9 @@ export function CodexSettingsTab({ vm }: { vm: Vm }) {
       <Card className='lg:col-span-2'>
         <CardHeader className='pb-2'>
           <CardTitle className='text-sm'>TLS 指纹</CardTitle>
+          <CardDescription className='text-[11px]'>
+            这家上游会读 ClientHello：Node 与 uTLS 的指纹不同，敏感账号建议走 worker 链路。
+          </CardDescription>
         </CardHeader>
         <CardContent className='space-y-1 text-[11px] text-muted-foreground'>
           <div className='flex items-center justify-between'>
