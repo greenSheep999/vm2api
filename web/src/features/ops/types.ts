@@ -35,6 +35,9 @@ export type OpsTicketPolicy = {
   candy_observation: boolean
   gate_scheduling: boolean
   probe_interval_seconds: number
+  probe_idle_interval_seconds: number
+  candy_interval_seconds: number
+  pelican_interval_seconds: number
   auto_park: boolean
   inject: boolean
   probe_routing: boolean

@@ -51,6 +51,13 @@ const CAPABILITY_QUESTIONS = Object.freeze({
       '圆形：苹果7 桃子9 西瓜8；五角星：苹果7 桃子6 西瓜4。' +
       '预先定好摸出个数，最少摸多少个才能保证同时拥有不同形状的苹果味和桃子味？只输出最终数字。',
   },
+  pelican: {
+    id: 'pelican',
+    expected: null,
+    prompt:
+      '请用 JSON 输出一个三步计划，字段 steps 为数组，每步包含 title 与 risk（0-1 小数）。' +
+      '只输出 JSON，不要解释。',
+  },
   poker: {
     id: 'poker',
     expected: null,
@@ -202,38 +209,94 @@ function recordSnapshot({
  * - auto_park 开启时，degraded 降权、healthy 恢复
  */
 export async function probeSweep({ projectRoot, policy = {}, setSchedule = null }) {
-  const interval = Number(policy?.probe_interval_seconds) || 0
-  if (!policy?.enabled || interval <= 0) return { skipped: 'disabled' }
+  const probeEvery = Number(policy?.probe_interval_seconds) || 0
+  const idleEvery = Number(policy?.probe_idle_interval_seconds) || 1800
+  const candyEvery = Number(policy?.candy_interval_seconds) || 0
+  const pelicanEvery = Number(policy?.pelican_interval_seconds) || 0
+  if (!policy?.enabled || (probeEvery <= 0 && candyEvery <= 0 && pelicanEvery <= 0)) {
+    return { skipped: 'disabled' }
+  }
   const models = Array.isArray(policy.models) && policy.models.length ? policy.models : [DEFAULT_MODEL]
   const flags = readAccountFlags()
   const snaps = readSnapshots()
+  const active = readRecentActiveVms(projectRoot)
   const out = []
+
   for (const vm of (listVms(projectRoot) || [])) {
     const vmId = vm?.id
     if (!vmId || !isCodexVm(vm)) continue
     if (flags.get(vmId) === true) continue
     for (const model of models) {
-      const snap = snaps.get(`${vmId}\u0000${model}`)
-      const last = snap?.probe_at ? Date.parse(snap.probe_at) : 0
-      if (last && Date.now() - last < interval * 1000) continue
-      const result = await runTicketProbe({
-        projectRoot,
-        vmId,
-        model,
-        edgeIp: policy?.edge_direct ? (policy.edge_ips || [])[0] || null : null,
-        policy,
-      }).catch((error) => ({ ok: false, verdict: 'error', reason: String(error?.message || error) }))
-      out.push({ vm_id: vmId, model, verdict: result?.verdict })
-      if (policy?.auto_park && typeof setSchedule === 'function') {
-        const degraded = result?.verdict === 'degraded' || result?.verdict === 'route_changed'
-        try {
-          if (degraded) setSchedule(vmId, true, `probe_${result.verdict}`)
-          else if (result?.ok) setSchedule(vmId, false, null)
-        } catch {}
+      const snap = snaps.get(`${vmId}\u0000${model}`) || {}
+      const probeAt = snap.probe_at ? Date.parse(snap.probe_at) : 0
+      const candyAt = snap.candy_at ? Date.parse(snap.candy_at) : 0
+      const pelicanAt = snap.pelican_at ? Date.parse(snap.pelican_at) : 0
+      const healthy = snap.probe_verdict === 'healthy' || snap.probe_verdict === 'healthy_same'
+
+      // 1) 探针：活跃号按 probeEvery，闲置号按 idleEvery（信号最及时，优先级最高）
+      const probeEveryMs = (active.has(vmId) ? probeEvery : Math.max(probeEvery, idleEvery)) * 1000
+      let healthyNow = healthy
+      if (probeEvery > 0 && (!probeAt || Date.now() - probeAt >= probeEveryMs)) {
+        const result = await runTicketProbe({
+          projectRoot,
+          vmId,
+          model,
+          edgeIp: policy?.edge_direct ? (policy.edge_ips || [])[0] || null : null,
+          policy,
+        }).catch((error) => ({ ok: false, verdict: 'error', reason: String(error?.message || error) }))
+        out.push({ vm_id: vmId, model, step: 'probe', verdict: result?.verdict })
+        healthyNow = result?.ok === true
+        if (policy?.auto_park && typeof setSchedule === 'function') {
+          const bad = result?.verdict === 'degraded' || result?.verdict === 'route_changed'
+          try {
+            if (bad) setSchedule(vmId, true, `probe_${result.verdict}`)
+            else if (result?.ok) setSchedule(vmId, false, null)
+          } catch {}
+        }
+      }
+
+      // 2) 糖果：只在探针 healthy 时跑（已降智的号跑糖过是纯浪费）
+      if (candyEvery > 0 && healthyNow && (!candyAt || Date.now() - candyAt >= candyEvery * 1000)) {
+        const res = await runCapabilityCheck({
+          vmId,
+          model,
+          questionId: 'candy',
+          proxyUrl: vm?.proxy?.url || null,
+          token: readCodexAccounts(projectRoot, vmId).find((a) => a?.access_token)?.access_token || null,
+        }).catch(() => null)
+        if (res) out.push({ vm_id: vmId, model, step: 'candy', verdict: res.verdict, answer: res.answer })
+      }
+
+      // 3) 鹈鹕：变化最慢，间隔最长
+      if (pelicanEvery > 0 && healthyNow && (!pelicanAt || Date.now() - pelicanAt >= pelicanEvery * 1000)) {
+        const res = await runCapabilityCheck({
+          vmId,
+          model,
+          questionId: 'pelican',
+          proxyUrl: vm?.proxy?.url || null,
+          token: readCodexAccounts(projectRoot, vmId).find((a) => a?.access_token)?.access_token || null,
+        }).catch(() => null)
+        if (res) out.push({ vm_id: vmId, model, step: 'pelican', verdict: res.verdict })
       }
     }
   }
   return { probed: out.length, results: out }
+}
+
+/** 近 30 分钟有流量的槽位算活跃，探针按更密的间隔跑。 */
+function readRecentActiveVms(projectRoot) {
+  const set = new Set()
+  try {
+    const rows = db()
+      .prepare(
+        `SELECT DISTINCT vm_id FROM usage_logs
+          WHERE vm_id IS NOT NULL
+            AND datetime(replace(created_at,'T',' ')) > datetime('now','-30 minutes')`,
+      )
+      .all()
+    for (const row of rows) if (row.vm_id) set.add(row.vm_id)
+  } catch {}
+  return set
 }
 
 /** 面板用快照：账号 + 开关 + 每模型票状态。 */
@@ -516,6 +579,17 @@ export async function runCapabilityCheck({ vmId, model, questionId = 'candy', ed
     prompt: question.prompt,
   })
   const judged = judgeCapabilityAnswer(questionId, extractText(shot.preview))
+  // 独立节律：各自写回自己的时间戳，互不覆盖。
+  try {
+    const at = nowIso()
+    if (questionId === 'candy') {
+      db().prepare('UPDATE ticket_snapshots SET candy_at = ?, candy_verdict = ?, candy_answer = ? WHERE vm_id = ? AND model = ?')
+        .run(at, judged.verdict, judged.answer ?? null, vmId, model)
+    } else if (questionId === 'pelican') {
+      db().prepare('UPDATE ticket_snapshots SET pelican_at = ?, pelican_verdict = ? WHERE vm_id = ? AND model = ?')
+        .run(at, judged.verdict, vmId, model)
+    }
+  } catch {}
   recordEvent({
     kind: 'capability',
     vm_id: vmId,

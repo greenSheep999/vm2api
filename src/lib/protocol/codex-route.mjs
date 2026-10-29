@@ -40,8 +40,14 @@ export const DEFAULT_CODEX_TICKET = Object.freeze({
   candy_observation: true,
   /** 无有效票时把账号移出调度（sub 的「无票时暂停目标模型」）。 */
   gate_scheduling: false,
-  /** 定时探针间隔（秒）；0 = 关闭自动探针。 */
+  /** 定时探针间隔（秒）；0 = 关闭自动探针。活跃号用这个值。 */
   probe_interval_seconds: 0,
+  /** 闲置号（不在调度/无流量）的探针间隔，默认比活跃号稀疏 6 倍。 */
+  probe_idle_interval_seconds: 1800,
+  /** 糖果题间隔（秒），0 = 关闭；只对探针 healthy 的号跑。 */
+  candy_interval_seconds: 900,
+  /** 鹈鹕结构指纹间隔（秒），0 = 关闭。 */
+  pelican_interval_seconds: 1800,
   /** 探针判定 degraded 时自动降权（默认关闭，先观察）。 */
   auto_park: false,
   /** 业务请求注入票库中「已验证」的门票（默认关闭）。 */
@@ -101,6 +107,9 @@ export function normalizeCodexTicketPolicy(raw = {}) {
     candy_observation: src.candy_observation !== false,
     gate_scheduling: src.gate_scheduling === true,
     probe_interval_seconds: int(src.probe_interval_seconds, 0, 0, 86_400),
+    probe_idle_interval_seconds: int(src.probe_idle_interval_seconds, 1800, 60, 86_400),
+    candy_interval_seconds: int(src.candy_interval_seconds, 900, 0, 86_400),
+    pelican_interval_seconds: int(src.pelican_interval_seconds, 1800, 0, 86_400),
     auto_park: src.auto_park === true,
     inject: src.inject === true,
     probe_routing: src.probe_routing === true,

@@ -224,7 +224,7 @@ export function PolicyCard({ policy }: { policy: OpsTicketPolicy }) {
           </span>
         </label>
         <div className='rounded-md border p-2.5 text-xs'>
-          <Label className='text-xs'>定时探针间隔（秒，0 = 关闭）</Label>
+          <Label className='text-xs'>探针间隔 · 活跃号（秒，0 = 关闭）</Label>
           <Input
             type='number'
             min={0}
@@ -236,7 +236,55 @@ export function PolicyCard({ policy }: { policy: OpsTicketPolicy }) {
             }
           />
           <p className='mt-1 text-[11px] text-muted-foreground'>
-            开启后服务端每分钟检查一次，距上次探针超过间隔才真正发请求。
+            近 30 分钟有流量的号用这个间隔；最及时的信号，建议 180–300 秒。
+          </p>
+        </div>
+        <div className='rounded-md border p-2.5 text-xs'>
+          <Label className='text-xs'>探针间隔 · 闲置号（秒）</Label>
+          <Input
+            type='number'
+            min={60}
+            max={86400}
+            className='mt-1.5'
+            value={draft.probe_idle_interval_seconds}
+            onChange={(e) =>
+              patch({ probe_idle_interval_seconds: Math.max(60, Number(e.target.value) || 1800) })
+            }
+          />
+          <p className='mt-1 text-[11px] text-muted-foreground'>
+            没流量的号没必要勤探，默认 1800 秒。
+          </p>
+        </div>
+        <div className='rounded-md border p-2.5 text-xs'>
+          <Label className='text-xs'>糖果题间隔（秒，0 = 关闭）</Label>
+          <Input
+            type='number'
+            min={0}
+            max={86400}
+            className='mt-1.5'
+            value={draft.candy_interval_seconds}
+            onChange={(e) =>
+              patch({ candy_interval_seconds: Math.max(0, Number(e.target.value) || 0) })
+            }
+          />
+          <p className='mt-1 text-[11px] text-muted-foreground'>
+            只对探针 healthy 的号跑；答 21 判通过，答 29 判降智。建议 900 秒。
+          </p>
+        </div>
+        <div className='rounded-md border p-2.5 text-xs'>
+          <Label className='text-xs'>鹈鹕间隔（秒，0 = 关闭）</Label>
+          <Input
+            type='number'
+            min={0}
+            max={86400}
+            className='mt-1.5'
+            value={draft.pelican_interval_seconds}
+            onChange={(e) =>
+              patch({ pelican_interval_seconds: Math.max(0, Number(e.target.value) || 0) })
+            }
+          />
+          <p className='mt-1 text-[11px] text-muted-foreground'>
+            结构指纹变化最慢，默认 1800 秒；目前只记录，不参与判定。
           </p>
         </div>
         <label className='flex items-start gap-2 rounded-md border p-2.5 text-xs'>
