@@ -383,7 +383,7 @@ export class PoolScheduler extends EventEmitter {
       reservePct: this.config.seat_budget_reserve_pct,
       strategy: this.config.strategy,
       stickyWaitMs: () => this.config.sticky_wait_timeout_ms,
-      stickyTtlMs: () => (Number(this.stickyRouter?.config?.ttl_seconds) || 86400) * 1000,
+      stickyTtlMs: () => (Number(this.stickyRouter?.config?.ttl_seconds) || 3600) * 1000,
       onChange: () => this.emit('change'),
     })
     this.unitCircuit = unitCircuit

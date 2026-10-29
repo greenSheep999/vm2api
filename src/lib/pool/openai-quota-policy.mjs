@@ -8,8 +8,10 @@
 import { buildCodexUsageView, hasSpendableCodexCredits } from '../protocol/codex-usage.mjs'
 
 export const OPENAI_QUOTA_DEFAULTS = Object.freeze({
-  limit_5h: 1,
-  limit_7d: 1,
+  // 到 85% 就让位给更闲的账号：等到 100% 才换已经太晚，那时上游多半开始软限速，
+  // 表现为「降智 / 变慢」。parked 只降低优先级，全池都满时仍可回退使用。
+  limit_5h: 0.85,
+  limit_7d: 0.85,
   max_concurrency: 2,
   max_rpm: 0,
   max_sessions: 0,

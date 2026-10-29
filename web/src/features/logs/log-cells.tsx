@@ -136,6 +136,19 @@ export function ModelDisplayWithRedirect({
           <span className='truncate'>{audit.sentUpstreamModel}</span>
         </div>
       ) : null}
+      {row.turnStateVerdict && row.turnStateVerdict !== 'ok' ? (
+        <div className='flex min-w-0 items-center gap-1 truncate text-[10px] text-rose-600 dark:text-rose-400'>
+          <span className='shrink-0'>
+            {row.turnStateVerdict === 'absent'
+              ? '无门票'
+              : row.turnStateVerdict === 'short'
+                ? `门票块数不足 ${row.turnStateBlocks ?? '?'}`
+                : row.turnStateVerdict === 'tall'
+                  ? `门票块数超出 ${row.turnStateBlocks ?? '?'}`
+                  : '门票不合法'}
+          </span>
+        </div>
+      ) : null}
       {audit.effortDowngraded ? (
         <div className='flex min-w-0 items-center gap-1 truncate text-xs text-rose-600 dark:text-rose-400'>
           <span className='shrink-0'>↓ 上游降档:</span>

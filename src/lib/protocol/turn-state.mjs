@@ -89,7 +89,8 @@ export function parseTurnState(value) {
  * - `absent`   没有票（上游没给）
  * - `malformed` 信封不合法
  * - `short`    块数低于该套餐期望（降级/限流信号）
- * - `ok`       块数与套餐一致
+ * - `tall`     块数高于期望（套餐/信封格式与假设不符，不可当作 ok）
+ * - `ok`       块数恰好等于套餐期望
  */
 export function judgeTurnState(value, planType) {
   const parsed = parseTurnState(value)
@@ -104,11 +105,20 @@ export function judgeTurnState(value, planType) {
     }
   }
   const expected = expectedTurnStateBlocks(planType)
+  // 严格判据：只有块数**恰好**等于该套餐期望才算 ok。
+  // 少了是降级信号，多了说明套餐或信封格式变了对不上我们的假设，同样不能当 ok。
+  const verdict = parsed.blocks < expected ? 'short' : parsed.blocks > expected ? 'tall' : 'ok'
+  const reason =
+    verdict === 'short'
+      ? `blocks_below_${expected}`
+      : verdict === 'tall'
+        ? `blocks_above_${expected}`
+        : `blocks_${expected}`
   return {
-    verdict: parsed.blocks < expected ? 'short' : 'ok',
+    verdict,
     blocks: parsed.blocks,
     len: parsed.len,
     issued_at: parsed.issued_at,
-    reason: parsed.blocks < expected ? `blocks_below_${expected}` : `blocks_${expected}`,
+    reason,
   }
 }

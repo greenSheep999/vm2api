@@ -478,6 +478,35 @@ export function PerformanceTab({ row }: { row: UsageLogRow }) {
             label='缓存读取'
             value={formatTokenAmount(row.cacheReadInputTokens)}
           />
+          <FieldRow
+            label='回合门票'
+            value={
+              row.turnStateVerdict == null
+                ? null
+                : row.turnStateVerdict === 'ok'
+                  ? `正常（${row.turnStateBlocks} 块）`
+                  : row.turnStateVerdict === 'absent'
+                    ? '上游未发（裸打）'
+                    : row.turnStateVerdict === 'short'
+                      ? `块数不足（${row.turnStateBlocks}）`
+                      : row.turnStateVerdict === 'tall'
+                        ? `块数超出（${row.turnStateBlocks}）`
+                        : '信封不合法'
+            }
+            health={
+              row.turnStateVerdict === 'ok'
+                ? 'good'
+                : row.turnStateVerdict === 'absent'
+                  ? 'critical'
+                  : 'slow'
+            }
+            missing={row.turnStateVerdict == null}
+          />
+          <FieldRow
+            label='门票签发时间'
+            value={row.turnStateIssuedAt?.replace('T', ' ').slice(0, 19) ?? null}
+            missing={!row.turnStateIssuedAt}
+          />
           <FieldRow label='下行写入字节' value={null} missing />
           <FieldRow label='下行写/刷耗时' value={null} missing />
           <FieldRow label='客户端断开' value={null} missing />

@@ -27,6 +27,15 @@ export const DEFAULT_STICKY_BODY_KEYS = ['conversation_id', 'session_id', 'threa
 /** Per-request ids — never use as a conversation key. */
 export const EPHEMERAL_STICKY_KEYS = new Set(['x-client-request-id', 'x-request-id'])
 
+/**
+ * 会话粘性默认存活 1 小时。
+ *
+ * 24 小时会把一个长会话整天钉在同一账号上：5h/7d 额度持续上涨、本地仍认为可用，
+ * 上游则开始软限速/降推理资源，表现为「越用越笨」。1 小时足够保住同一回合的
+ * 缓存命中，又不会把额度堆在一个号上。
+ */
+export const DEFAULT_STICKY_TTL_SEC = 3600
+
 export function normalizeStickyPlatform(platform) {
   const value = String(platform || '')
     .trim()
@@ -60,7 +69,7 @@ export function mergeStickyConfig(config) {
   return {
     enabled: sticky.enabled !== false,
     mode: sticky.mode || 'conversation',
-    ttl_seconds: sticky.ttl_seconds || 86400,
+    ttl_seconds: sticky.ttl_seconds || DEFAULT_STICKY_TTL_SEC,
     header_keys: headerKeys,
     body_keys: Array.isArray(sticky.body_keys) && sticky.body_keys.length ? sticky.body_keys : DEFAULT_STICKY_BODY_KEYS,
     outbound_session: outboundSession,
@@ -453,7 +462,7 @@ export class StickyRouter {
     } = {},
   ) {
     if (!key || !this.config.enabled) return false
-    const ttl = (this.config.ttl_seconds || 86400) * 1000
+    const ttl = (this.config.ttl_seconds || DEFAULT_STICKY_TTL_SEC) * 1000
     const prev = this.repo.get(key) || {}
     const prevGeneration = Number(prev.generation) || 0
     if (ifGeneration != null && prevGeneration !== Number(ifGeneration)) return false
@@ -501,7 +510,7 @@ export class StickyRouter {
   /** Move an entire family together. Session rows stay until their next turn. */
   rebindFamily(key, { accountId, vmId } = {}) {
     if (!key || !this.config.enabled || !accountId || !vmId) return null
-    const ttl = (this.config.ttl_seconds || 86400) * 1000
+    const ttl = (this.config.ttl_seconds || DEFAULT_STICKY_TTL_SEC) * 1000
     const prev = this.repo.get(key) || {}
     const generation = (Number(prev.generation) || 0) + 1
     this.repo.upsert(key, {
@@ -521,7 +530,7 @@ export class StickyRouter {
   /** Device VM affinity is a soft VM preference, not a session seat binding. */
   bindDeviceAffinity(key, { accountId, vmId } = {}, { countHit = false } = {}) {
     if (!key || !this.config.enabled || !accountId || !vmId) return null
-    const ttl = (this.config.ttl_seconds || 86400) * 1000
+    const ttl = (this.config.ttl_seconds || DEFAULT_STICKY_TTL_SEC) * 1000
     const prev = this.repo.get(key) || {}
     const changed = !!(prev.vm_id && (prev.account_id !== accountId || prev.vm_id !== vmId))
     const prevGeneration = Number(prev.generation) || 0

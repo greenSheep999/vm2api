@@ -15,7 +15,9 @@ import { hasRefreshPresence } from './oauth-credentials.mjs'
 import { vmHasProxyPath } from './credential-refresh-monitor.mjs'
 import { hasLiveExtraSample, hasOfficialUsageSample, parseResetMs } from '../pool/quota-window.mjs'
 export const DEFAULT_USAGE_PROBE = Object.freeze({
-  enabled: false,
+  // 默认开启：没有周期用量探测，就看不到 5h/7d 额度爬升，
+  // quota gate 的 85% 阈值永远不会触发。
+  enabled: true,
   interval_sec: 60,
   stale_sec: 300,
   // Opt-in: defer the first periodic hop after an Extra 5h reset.
