@@ -442,6 +442,7 @@ function LogRow({
                         避免同一份数据在两列重复。 */}
                     {hits != null ? (
                       <span className='flex items-center gap-1 text-xs'>
+                        <span className='text-[10px] text-muted-foreground'>命中</span>
                         <span className={hitRateToneClass(hits)}>{hits}%</span>
                         {row.cacheTtlApplied ? (
                           <Badge variant='outline' className={TTL_BADGE}>
@@ -452,11 +453,16 @@ function LogRow({
                     ) : (
                       <span className='text-muted-foreground'>—</span>
                     )}
-                    {row.costUsd != null ? (
-                      <span className='text-[10px] text-muted-foreground'>
-                        全价 ${Number(row.costUsd).toFixed(4)}
-                      </span>
-                    ) : null}
+                    {(() => {
+                      // 全价 = 假设这些 token 全部按「未命中」计价时的费用。
+                      // 不能用实付金额冒充全价，那算出来会让人以为缓存没有优惠。
+                      const full = fullPriceUsd(row)
+                      return full != null ? (
+                        <span className='text-[10px] text-muted-foreground'>
+                          全价 ${full.toFixed(4)}
+                        </span>
+                      ) : null
+                    })()}
                   </div>
                 </TooltipTrigger>
                 <TooltipContent align='end' className='w-[210px] space-y-1'>
@@ -690,6 +696,29 @@ function LogRow({
  * 键集游标的无限虚拟列表（hub `VirtualizedLogsTable`）。
  * 轮询只在列表停在顶部附近时进行：往下翻时重拉所有已加载页既慢又会打乱阅读。
  */
+/**
+ * 计算「全价」：把所有输入 token（含缓存命中与写入）都按未命中单价计费，
+ * 加上输出费用。单价从本行的 input 费用 ÷ input token 反推。
+ */
+function fullPriceUsd(row: UsageLogRow): number | null {
+  const breakdown = row.costBreakdown as
+    | { input?: number; output?: number; cacheRead?: number; cacheCreation?: number }
+    | null
+    | undefined
+  const inputTokens = Number(row.inputTokens) || 0
+  const cacheRead = Number(row.cacheReadInputTokens) || 0
+  const cacheWrite = Number(row.cacheCreationInputTokens) || 0
+  const outputCost = Number(breakdown?.output ?? NaN)
+  if (!breakdown || !Number.isFinite(outputCost)) return null
+  const inputCost = Number(breakdown.input ?? 0)
+  // 没有未命中输入时无法反推单价，直接放弃，避免瞎算。
+  if (!inputTokens || inputCost <= 0) return null
+  const unit = inputCost / inputTokens
+  const fullInput = (inputTokens + cacheRead + cacheWrite) * unit
+  const full = fullInput + outputCost
+  return Number.isFinite(full) ? full : null
+}
+
 export function VirtualizedLogsTable({
   filters,
   autoRefreshEnabled,
