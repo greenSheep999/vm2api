@@ -501,10 +501,32 @@ export class UsageLogsView {
       list.push(a)
       chains.set(a.request_id, list)
     }
+    // 账号档位（降智/满血）是账号级结论：取每个槽位最近一次探针结果。
+    const probe = new Map()
+    const vmIds = uniq(rows.map((r) => r.vm_id).filter(Boolean))
+    if (vmIds.length) {
+      try {
+        const found = this.db
+          .prepare(
+            `SELECT vm_id, verdict, started_at FROM (
+               SELECT vm_id, verdict, started_at,
+                      ROW_NUMBER() OVER (PARTITION BY vm_id ORDER BY started_at DESC) AS rn
+                 FROM iq_task_runs
+                WHERE vm_id IN (${placeholders(vmIds)}) AND question_id = 'probe'
+             ) WHERE rn = 1`,
+          )
+          .all(...vmIds)
+        for (const item of found) probe.set(item.vm_id, item)
+      } catch {}
+    }
     return rows.map((row) => {
       const own = (row.request_id && chains.get(row.request_id)) || []
       const chain = own.filter((a) => attemptWithinRow(a, row)).map((a) => toProviderChainItem(a, names))
-      return toUsageLogRow(row, names, chain)
+      const mapped = toUsageLogRow(row, names, chain)
+      const hit = probe.get(row.vm_id)
+      mapped.probeVerdict = hit?.verdict || null
+      mapped.probeAt = hit?.started_at || null
+      return mapped
     })
   }
 
