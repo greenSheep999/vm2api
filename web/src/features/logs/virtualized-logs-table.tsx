@@ -168,7 +168,6 @@ import {
   StatusBadge,
 } from './log-cells'
 import { cacheWriteSplit, copyText, hasFastMode } from './log-display'
-import { ProviderCell } from './provider-chain-popover'
 import { usageLogsBatchQueryOptions } from './queries'
 import { RelativeTime } from './relative-time'
 import { api } from '@/lib/api'
@@ -354,40 +353,34 @@ function LogRow({
           )}
         </div>
       )}
-      {hidden('vm') ? null : (
-        <div className='min-w-[90px] flex-[0.9] px-1.5 font-mono text-xs'>
-          {row.vmName || row.vmId ? (
+      {hidden('vm') && hidden('provider') ? null : (
+        <div className='min-w-[150px] flex-[1.7] px-1.5 font-mono text-xs'>
+          {row.vmName || row.vmId || row.providerName ? (
             <Tooltip delayDuration={250}>
               <TooltipTrigger asChild>
                 <span className='flex min-w-0 cursor-help flex-col'>
-                  <span className='truncate'>{row.vmName || row.vmId}</span>
-                  {row.vmName && row.vmId && row.vmName !== row.vmId ? (
-                    <span className='truncate text-[10px] text-muted-foreground'>
-                      {row.vmId}
-                    </span>
-                  ) : null}
+                  {/* 第一行固定是槽位名（vm-gpt-02） */}
+                  <span className='truncate text-xs'>{row.vmId || '—'}</span>
+                  {/* 第二行固定是账号；providerName 为空说明历史行没记账号，明确写「账号未记录」 */}
+                  <span className='truncate text-[10px] text-muted-foreground'>
+                    {row.providerName && row.providerName !== row.vmId
+                      ? row.providerName
+                      : row.accountId && row.accountId !== row.vmId
+                        ? row.accountId
+                        : '账号未记录'}
+                  </span>
                 </span>
               </TooltipTrigger>
               <TooltipContent align='end' className='space-y-1 text-xs'>
                 <div>槽位: {row.vmId || '—'}</div>
                 <div>展示名: {row.vmName || '—'}</div>
                 <div>账号: {row.providerName || '—'}</div>
-                <div>账号: {row.accountId || '—'}</div>
+                <div>账号 ID: {row.accountId || '—'}</div>
               </TooltipContent>
             </Tooltip>
           ) : (
             <span className='text-muted-foreground'>—</span>
           )}
-        </div>
-      )}
-      {hidden('provider') ? null : (
-        <div className='min-w-[100px] flex-[1.5] px-1.5'>
-          <ProviderCell
-            row={row}
-            onChainItemClick={(chainIndex) =>
-              onOpenDetail(row, { tab: 'logic-trace', chainIndex })
-            }
-          />
         </div>
       )}
       <div className='min-w-[150px] flex-[1.7] px-1.5 font-mono text-xs'>
@@ -832,11 +825,8 @@ export function VirtualizedLogsTable({
               {isHidden('ip') ? null : (
                 <HeadCell className='min-w-[112px] flex-[1] px-2'>IP</HeadCell>
               )}
-              {isHidden('vm') ? null : (
-                <HeadCell className='min-w-[90px] flex-[0.9]'>槽位</HeadCell>
-              )}
-              {isHidden('provider') ? null : (
-                <HeadCell className='min-w-[100px] flex-[1.5]'>账号</HeadCell>
+              {isHidden('vm') && isHidden('provider') ? null : (
+                <HeadCell className='min-w-[150px] flex-[1.7]'>槽位 · 账号</HeadCell>
               )}
               <HeadCell className='min-w-[100px] flex-[1.3]'>计费模型</HeadCell>
               {isHidden('tokens') ? null : (

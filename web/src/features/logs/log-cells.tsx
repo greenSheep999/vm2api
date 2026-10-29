@@ -1,6 +1,7 @@
 import type { UsageLogRow } from '@/types/panel-usage-logs'
 import { ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { TONE_CLASS, logChips } from '@/lib/ticket-state'
 import { Badge } from '@/components/ui/badge'
 import {
   Tooltip,
@@ -91,14 +92,6 @@ export function ThinkingEffortDisplay({ effort }: { effort: string | null }) {
   )
 }
 
-/** 行级账号档位：降智时不再显示票信息。 */
-function ROW_PROBE_STATE(row: UsageLogRow): 'healthy' | 'degraded' | 'other' {
-  const v = row.probeVerdict
-  if (v === 'healthy' || v === 'healthy_same') return 'healthy'
-  if (v === 'degraded' || v === 'route_changed') return 'degraded'
-  return 'other'
-}
-
 export function ModelDisplayWithRedirect({
   row,
   onRedirectClick,
@@ -142,54 +135,23 @@ export function ModelDisplayWithRedirect({
       {/* 第二排：门票 + 模型一致性 + 上游降档，有才显示 */}
       {hasChips ? (
         <div className='flex min-w-0 flex-wrap items-center gap-1'>
-          {/* 票只在「满血 / 未探针」时显示：降智时这张票续不住，显示「有票」会误导。 */}
-          {ticket && ROW_PROBE_STATE(row) !== 'degraded' ? (
-            <Badge
-              variant='outline'
-              className={cn(
-                'shrink-0 px-1 text-[10px] leading-tight',
-                ticket === 'ok'
-                  ? 'border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-300'
-                  : 'border-rose-300 text-rose-700 dark:border-rose-700 dark:text-rose-300',
-              )}
-            >
-              {ticket === 'ok' ? `有票·${row.turnStateLen ?? 0}字` : ticket === 'absent' ? '无票' : '票异常'}
-            </Badge>
-          ) : null}
-          {row.probeVerdict ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Badge
-                  variant='outline'
-                  className={cn(
-                    'shrink-0 cursor-help px-1 text-[10px] leading-tight',
-                    row.probeVerdict === 'healthy' || row.probeVerdict === 'healthy_same'
-                      ? 'border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-300'
-                      : row.probeVerdict === 'degraded' || row.probeVerdict === 'route_changed'
-                        ? 'border-rose-300 text-rose-700 dark:border-rose-700 dark:text-rose-300'
-                        : 'border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300',
-                  )}
-                >
-                  {row.probeVerdict === 'healthy' || row.probeVerdict === 'healthy_same'
-                    ? '满血'
-                    : row.probeVerdict === 'degraded'
-                      ? '降智'
-                      : row.probeVerdict === 'route_changed'
-                        ? '疑似降智'
-                        : row.probeVerdict === 'no_ticket'
-                          ? '无票'
-                          : '未探针'}
-                </Badge>
-              </TooltipTrigger>
-              <TooltipContent className='max-w-xs space-y-1 text-xs'>
-                <div className='font-medium'>账号档位（两发探针）</div>
-                <div>探针时间: {row.probeAt ? String(row.probeAt).replace('T', ' ').slice(0, 19) : '—'}</div>
-                <div className='text-primary-foreground/75'>
-                  有票只说明上游给了回合票；带票续接被重铸即降智。
-                </div>
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
+          {/* 票 + 续接两个独立徽标：票只说明拿到没有，续接才说明能不能续。
+              低阶模型（5.6 系）不给满血/降智，只给可续/断票，因为它们做不出 6 系的题。 */}
+          {logChips({ model: row.model, ticketVerdict: ticket, ticketLen: row.turnStateLen, probeVerdict: row.probeVerdict }).map(
+            (chip) => (
+              <Tooltip key={chip.label}>
+                <TooltipTrigger asChild>
+                  <Badge
+                    variant='outline'
+                    className={cn('shrink-0 cursor-help px-1 text-[10px] leading-tight', TONE_CLASS[chip.tone])}
+                  >
+                    {chip.label}
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent className='max-w-xs text-xs'>{chip.hint}</TooltipContent>
+              </Tooltip>
+            ),
+          )}
           {audit.secondaryActualModel ? (
             <Tooltip>
               <TooltipTrigger asChild>

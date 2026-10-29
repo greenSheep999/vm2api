@@ -69,6 +69,7 @@ const SUMMARY_COLUMNS = [
   'log_mode',
   'method',
   'path',
+  'upstream_path',
   'protocol',
   'model',
   'stream',

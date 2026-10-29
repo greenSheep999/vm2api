@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Progress } from '@/components/ui/progress'
+import { TONE_CLASS, logChips } from '@/lib/ticket-state'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Link } from '@tanstack/react-router'
 import { api } from '@/lib/api'
@@ -454,44 +455,41 @@ export function HarvestPane() {
               <div className='mt-3 space-y-1'>
                 {a.models.map((t) => {
                   const key = `${a.id}\u0000${t.model}`
-                  const tier =
-                    t.probe_verdict === 'healthy' || t.probe_verdict === 'healthy_same'
-                      ? '满血'
-                      : t.probe_verdict === 'degraded' || t.probe_verdict === 'route_changed'
-                        ? '降智'
-                        : '未探针'
+                  // 与日志页共用同一套判定：票 / 续接分开，低阶模型不给满血-降智。
+                  const chips = a.skip_harvest
+                    ? [{ label: '不参与', tone: 'muted' as const, hint: '该账号已跳过打票' }]
+                    : t.verdict
+                      ? logChips({ model: t.model, ticketVerdict: t.verdict, ticketLen: t.len, probeVerdict: t.probe_verdict })
+                      : [{ label: '未打票', tone: 'muted' as const, hint: '还没有对这个模型打过票' }]
                   return (
                     <div
                       key={t.model}
                       className={cn(
                         'flex flex-col gap-0.5 rounded-lg border px-3 py-2 text-xs',
-                        tier === '满血'
+                        chips.some((c) => c.tone === 'ok')
                           ? 'border-emerald-300/60 bg-emerald-50/60 dark:border-emerald-900 dark:bg-emerald-950/20'
-                          : tier === '降智'
+                          : chips.some((c) => c.tone === 'bad')
                             ? 'border-rose-300/60 bg-rose-50/50 dark:border-rose-900 dark:bg-rose-950/20'
-                            : 'border-border bg-muted/30',
+                            : chips.some((c) => c.tone === 'warn')
+                              ? 'border-amber-300/60 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20'
+                              : 'border-border bg-muted/30',
                       )}
                     >
                       <span className='flex w-full items-center gap-2'>
                         <span className='w-[132px] shrink-0 font-mono text-[12px] font-medium'>{t.model}</span>
-                      <span
-                        className={cn(
-                          'shrink-0 rounded px-1.5 py-0.5 text-[10px]',
-                          tier === '满血'
-                            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                            : tier === '降智'
-                              ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
-                              : 'bg-black/5 text-muted-foreground dark:bg-white/10',
-                        )}
-                      >
-                        {tier}
+                      <span className='flex shrink-0 items-center gap-1'>
+                        {chips.map((chip) => (
+                          <span
+                            key={chip.label}
+                            title={chip.hint}
+                            className={cn('rounded border px-1.5 py-0.5 text-[10px]', TONE_CLASS[chip.tone])}
+                          >
+                            {chip.label}
+                          </span>
+                        ))}
                       </span>
                       <span className='flex-1 truncate text-[11px] text-muted-foreground'>
-                        {t.verdict === 'ok'
-                          ? `票 ${t.len ?? 0}字·${remainingText(t)}`
-                          : t.verdict === 'absent'
-                            ? '上游未铸票'
-                            : '票异常'}
+                        {t.verdict === 'ok' ? remainingText(t) : '—'}
                         {t.http_status ? ` · HTTP ${t.http_status}` : ''}
                         {running === key ? ' · 打票中…' : probing === key ? ' · 探针中…' : ''}
                       </span>

@@ -69,19 +69,20 @@ function previewOpsAcl() {
               const json = (await upstreamRes.json()) as any
               const logs = json?.data?.logs
               if (Array.isArray(logs) && logs.length) {
-                const variants = [
-                  ['ok', 'healthy', 'gpt-6-astra', 'xhigh'],
-                  ['ok', 'degraded', 'gpt-6-astra', 'xhigh'],
-                  ['ok', null, 'gpt-6-astra', 'xhigh'],
-                  ['absent', 'degraded', 'gpt-6-astra', 'xhigh'],
-                  ['ok', 'route_changed', 'gpt-6-astra', 'xhigh'],
-                  ['ok', 'healthy', 'gpt-6.1-sol', 'xhigh'],
-                  ['ok', 'degraded', 'gpt-5.6-luna', 'xhigh'],
-                  ['ok', 'healthy', 'gpt-6-astra', 'low'],
-                  ['ok', 'healthy', 'gpt-6-astra-20260801', 'xhigh'],
+                // [票, 探针, 上游响应模型, effort, 本行模型]
+                const variants: Array<[string, string | null, string, string, string]> = [
+                  ['ok', 'healthy', 'gpt-6-astra', 'xhigh', 'gpt-6-astra'],
+                  ['ok', 'degraded', 'gpt-6-astra', 'xhigh', 'gpt-6-astra'],
+                  ['ok', null, 'gpt-6-astra', 'xhigh', 'gpt-6-astra'],
+                  ['absent', 'degraded', 'gpt-6-astra', 'xhigh', 'gpt-6-astra'],
+                  ['ok', 'route_changed', 'gpt-6-astra', 'xhigh', 'gpt-6-astra'],
+                  ['ok', 'healthy', 'gpt-6-astra', 'xhigh', 'gpt-5.6-sol'],
+                  ['ok', 'degraded', 'gpt-6-astra', 'xhigh', 'gpt-5.6-sol'],
+                  ['ok', 'inconclusive', 'gpt-6.1-sol', 'xhigh', 'gpt-6.1-sol'],
+                  ['ok', 'healthy', 'gpt-6-astra', 'low', 'gpt-6-sol'],
                 ]
                 const base = logs.slice(0, 9)
-                const out = variants.map(([ticket, probe, upstreamModel, effort], i) => {
+                const out = variants.map(([ticket, probe, upstreamModel, effort, rowModel], i) => {
                   const row = { ...(base[i] || base[0]) }
                   row.id = `mock_${i}`
                   row.vmId = `vm-mock-0${i + 1}`
@@ -94,8 +95,8 @@ function previewOpsAcl() {
                   row.reasoningEffort = effort
                   row.upstreamReasoningEffort = effort === 'low' ? 'low' : effort
                   row.upstreamResponseModel = upstreamModel
-                  row.requestedModel = 'gpt-6-astra'
-                  row.model = 'gpt-6-astra'
+                  row.requestedModel = rowModel
+                  row.model = rowModel
                   return row
                 })
                 json.data.logs = out
