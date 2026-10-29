@@ -85,7 +85,19 @@ export function HarvestPane() {
   const [borrowing, setBorrowing] = useState<string | null>(null)
   const [checking, setChecking] = useState<string | null>(null)
   const [filter, setFilter] = useState<'all' | 'ticket' | 'probe' | 'select' | 'candy'>('all')
-  const [batchBusy, setBatchBusy] = useState<{ vmId: string; kind: string; done: number; total: number } | null>(null)
+  const [batchBusy, setBatchBusy] = useState<{
+    vmId: string
+    kind: string
+    done: number
+    total: number
+    current: string
+  } | null>(null)
+  // 本地操作记录：每次打票/探针/借票/能力题都留一条，页面顶部直接能看到刚才做了什么。
+  const [opLog, setOpLog] = useState<
+    Array<{ at: string; vmId: string; kind: string; model: string; ok: boolean; msg: string }>
+  >([])
+  const pushOp = (entry: { vmId: string; kind: string; model: string; ok: boolean; msg: string }) =>
+    setOpLog((cur) => [{ at: new Date().toISOString(), ...entry }, ...cur].slice(0, 30))
   // 相对时间心跳：让「N 秒前 / 剩余 N 分钟」自己走动，不用等轮询。
   const [, forceTick] = useState(0)
   useEffect(() => {
@@ -120,15 +132,22 @@ export function HarvestPane() {
   async function runBatch(vmId: string, kind: 'ticket' | 'probe' | 'borrow' | 'candy') {
     const targets = modelsOf(vmId)
     if (!targets.length) return toast.warning('这个槽位还没有模型可打')
-    setBatchBusy({ vmId, kind, done: 0, total: targets.length })
+    setBatchBusy({ vmId, kind, done: 0, total: targets.length, current: targets[0] })
     try {
       for (let i = 0; i < targets.length; i++) {
         const model = targets[i]
-        if (kind === 'ticket') await run(vmId, model)
-        else if (kind === 'probe') await probe(vmId, model)
-        else if (kind === 'borrow') await borrow(vmId, model)
-        else await capability(vmId, model)
-        setBatchBusy({ vmId, kind, done: i + 1, total: targets.length })
+        setBatchBusy({ vmId, kind, done: i, total: targets.length, current: model })
+        const t0 = Date.now()
+        try {
+          if (kind === 'ticket') await run(vmId, model)
+          else if (kind === 'probe') await probe(vmId, model)
+          else if (kind === 'borrow') await borrow(vmId, model)
+          else await capability(vmId, model)
+          pushOp({ vmId, kind, model, ok: true, msg: `${((Date.now() - t0) / 1000).toFixed(1)}s` })
+        } catch (error) {
+          pushOp({ vmId, kind, model, ok: false, msg: String((error as Error)?.message || error).slice(0, 80) })
+        }
+        setBatchBusy({ vmId, kind, done: i + 1, total: targets.length, current: model })
       }
       void qc.invalidateQueries({ queryKey: ['ops-harvest'] })
     } finally {
@@ -508,8 +527,17 @@ export function HarvestPane() {
                   <Brain className='mr-1.5 h-3.5 w-3.5' />能力题
                 </Button>
                 {batchBusy?.vmId === a.id ? (
-                  <span className='ml-1 text-[10px] text-primary'>
-                    {batchBusy.done}/{batchBusy.total}
+                  <span className='ml-1 flex items-center gap-2 text-[10px] text-primary'>
+                    <span className='font-mono'>{batchBusy.current}</span>
+                    <span className='h-1.5 w-24 overflow-hidden rounded bg-primary/15'>
+                      <span
+                        className='block h-full bg-primary transition-all'
+                        style={{ width: `${Math.round((batchBusy.done / Math.max(1, batchBusy.total)) * 100)}%` }}
+                      />
+                    </span>
+                    <span className='font-mono'>
+                      {batchBusy.done}/{batchBusy.total}
+                    </span>
                   </span>
                 ) : null}
               </div>
@@ -517,6 +545,37 @@ export function HarvestPane() {
           ))}
         </div>
       </section>
+
+      {opLog.length ? (
+        <section className={CARD}>
+          <div className='mb-2 flex items-center justify-between'>
+            <h4 className='text-sm font-semibold'>本次操作</h4>
+            <button
+              type='button'
+              className='text-[11px] text-muted-foreground hover:text-foreground'
+              onClick={() => setOpLog([])}
+            >
+              清空
+            </button>
+          </div>
+          <div className='space-y-0.5'>
+            {opLog.map((op, i) => (
+              <div key={`${op.at}-${i}`} className='flex items-center gap-2 font-mono text-[11px]'>
+                <span className='shrink-0 text-muted-foreground'>{op.at.slice(11, 19)}</span>
+                <span className='shrink-0'>{op.vmId}</span>
+                <span className='shrink-0 rounded bg-muted px-1 text-[10px]'>
+                  {op.kind === 'ticket' ? '打票' : op.kind === 'probe' ? '探针' : op.kind === 'borrow' ? '借票' : '能力题'}
+                </span>
+                <span className='shrink-0 text-muted-foreground'>{op.model}</span>
+                <span className={op.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}>
+                  {op.ok ? '完成' : '失败'}
+                </span>
+                <span className='flex-1 truncate text-right text-muted-foreground'>{op.msg}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className={CARD}>
         <div className='mb-3 flex flex-wrap items-center justify-between gap-2'>
