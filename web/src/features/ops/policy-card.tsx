@@ -187,6 +187,35 @@ export function PolicyCard({ policy }: { policy: OpsTicketPolicy }) {
         </label>
         <label className='flex items-start gap-2 rounded-md border p-2.5 text-xs'>
           <Switch
+            checked={draft.auto_park}
+            onCheckedChange={(auto_park) => patch({ auto_park })}
+          />
+          <span>
+            <span className='font-medium'>探针降智时自动降权</span>
+            <span className='mt-0.5 block text-[11px] text-muted-foreground'>
+              探针判 degraded/route_changed 就关调度，判 healthy 自动恢复。
+              默认关闭，建议先观察一段时间。
+            </span>
+          </span>
+        </label>
+        <div className='rounded-md border p-2.5 text-xs'>
+          <Label className='text-xs'>定时探针间隔（秒，0 = 关闭）</Label>
+          <Input
+            type='number'
+            min={0}
+            max={86400}
+            className='mt-1.5'
+            value={draft.probe_interval_seconds}
+            onChange={(e) =>
+              patch({ probe_interval_seconds: Math.max(0, Number(e.target.value) || 0) })
+            }
+          />
+          <p className='mt-1 text-[11px] text-muted-foreground'>
+            开启后服务端每分钟检查一次，距上次探针超过间隔才真正发请求。
+          </p>
+        </div>
+        <label className='flex items-start gap-2 rounded-md border p-2.5 text-xs'>
+          <Switch
             checked={draft.gate_scheduling}
             onCheckedChange={(gate_scheduling) => patch({ gate_scheduling })}
           />

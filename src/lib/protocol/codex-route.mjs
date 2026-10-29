@@ -40,6 +40,10 @@ export const DEFAULT_CODEX_TICKET = Object.freeze({
   candy_observation: false,
   /** 无有效票时把账号移出调度（sub 的「无票时暂停目标模型」）。 */
   gate_scheduling: false,
+  /** 定时探针间隔（秒）；0 = 关闭自动探针。 */
+  probe_interval_seconds: 0,
+  /** 探针判定 degraded 时自动降权（默认关闭，先观察）。 */
+  auto_park: false,
 })
 
 export function normalizeCodexTicketPolicy(raw = {}) {
@@ -91,6 +95,8 @@ export function normalizeCodexTicketPolicy(raw = {}) {
     edge_direct: src.edge_direct === true,
     candy_observation: src.candy_observation === true,
     gate_scheduling: src.gate_scheduling === true,
+    probe_interval_seconds: int(src.probe_interval_seconds, 0, 0, 86_400),
+    auto_park: src.auto_park === true,
     edge_ips: Array.isArray(src.edge_ips)
       ? src.edge_ips
           .map((ip) => String(ip || '').trim())

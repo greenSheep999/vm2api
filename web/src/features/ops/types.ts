@@ -34,6 +34,8 @@ export type OpsTicketPolicy = {
   edge_ips: string[]
   candy_observation: boolean
   gate_scheduling: boolean
+  probe_interval_seconds: number
+  auto_park: boolean
 }
 
 export type OpsIqResult = {

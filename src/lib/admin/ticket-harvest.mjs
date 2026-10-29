@@ -14,6 +14,7 @@ import dns from 'node:dns/promises'
 import { getDb } from '../db/database.mjs'
 import { getVm, listVms } from '../vm/vm-registry.mjs'
 import { readCodexAccounts } from '../vm/codex-slot.mjs'
+import { isCodexVm } from '../vm/vm-kind.mjs'
 import { createSocksProxyAgent } from '../vm/proxy-agent.mjs'
 import { judgeTurnState, expectedTurnStateBlocks } from '../protocol/turn-state.mjs'
 
@@ -155,13 +156,55 @@ function recordSnapshot({
   return checkedAt
 }
 
+/**
+ * 定时探针：对参与打票的账号逐个跑两发探针。
+ *
+ * - skip_harvest 的账号跳过
+ * - 距上次探针不足 probe_interval_seconds 的跳过（不重复烧额度）
+ * - auto_park 开启时，degraded 降权、healthy 恢复
+ */
+export async function probeSweep({ projectRoot, policy = {}, setSchedule = null }) {
+  const interval = Number(policy?.probe_interval_seconds) || 0
+  if (!policy?.enabled || interval <= 0) return { skipped: 'disabled' }
+  const models = Array.isArray(policy.models) && policy.models.length ? policy.models : [DEFAULT_MODEL]
+  const flags = readAccountFlags()
+  const snaps = readSnapshots()
+  const out = []
+  for (const vm of (listVms(projectRoot) || [])) {
+    const vmId = vm?.id
+    if (!vmId || !isCodexVm(vm)) continue
+    if (flags.get(vmId) === true) continue
+    for (const model of models) {
+      const snap = snaps.get(`${vmId}\u0000${model}`)
+      const last = snap?.probe_at ? Date.parse(snap.probe_at) : 0
+      if (last && Date.now() - last < interval * 1000) continue
+      const result = await runTicketProbe({
+        projectRoot,
+        vmId,
+        model,
+        edgeIp: policy?.edge_direct ? (policy.edge_ips || [])[0] || null : null,
+        policy,
+      }).catch((error) => ({ ok: false, verdict: 'error', reason: String(error?.message || error) }))
+      out.push({ vm_id: vmId, model, verdict: result?.verdict })
+      if (policy?.auto_park && typeof setSchedule === 'function') {
+        const degraded = result?.verdict === 'degraded' || result?.verdict === 'route_changed'
+        try {
+          if (degraded) setSchedule(vmId, true, `probe_${result.verdict}`)
+          else if (result?.ok) setSchedule(vmId, false, null)
+        } catch {}
+      }
+    }
+  }
+  return { probed: out.length, results: out }
+}
+
 /** 面板用快照：账号 + 开关 + 每模型票状态。 */
 export function harvestOverview(projectRoot) {
   const flags = readAccountFlags()
   const snaps = readSnapshots()
   const vms = listVms(projectRoot) || []
   const accounts = vms
-    .filter((vm) => vm?.id && String(vm.id).startsWith('vm-gpt-'))
+    .filter((vm) => vm?.id && isCodexVm(vm))
     .map((vm) => {
       const models = []
       for (const [key, snap] of snaps) {
@@ -498,7 +541,7 @@ export async function runHarvest({ cfg, projectRoot, vmId, model, policy = null 
     recordEvent({ kind: 'ticket', vm_id: vmId, model, result: 'fail', reason: 'vm_not_found' })
     return { ok: false, reason: 'vm_not_found' }
   }
-  if (!String(vmId).startsWith('vm-gpt-')) {
+  if (!isCodexVm(vm)) {
     return { ok: false, reason: 'not_a_codex_slot' }
   }
   const useModel = String(model || DEFAULT_MODEL).trim() || DEFAULT_MODEL

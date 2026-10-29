@@ -1301,6 +1301,28 @@ if (process.env.KIN_CRS_MOCK !== '1') {
 await bootApiKernel(cfg)
 
 server.listen(cfg.port, cfg.host, () => {
+  // 定时门票探针：默认关闭（probe_interval_seconds=0），开启后按间隔轮询参与打票的账号。
+  try {
+    const timer = setInterval(async () => {
+      try {
+        const policy = routingConfig?.codex?.ticket
+        if (!policy?.enabled || !(Number(policy.probe_interval_seconds) > 0)) return
+        const { probeSweep } = await import('./lib/admin/ticket-harvest.mjs')
+        const { setScheduleOff } = await import('./lib/vm/vm-registry.mjs')
+        await probeSweep({
+          projectRoot: cfg.paths.project,
+          policy,
+          setSchedule: (vmId, off, reason) =>
+            setScheduleOff(cfg.paths.project, vmId, off, { reason, preserveStatus: true }),
+        })
+      } catch (error) {
+        console.warn('[ticket-probe] sweep failed', error?.message || error)
+      }
+    }, 60_000)
+    timer.unref?.()
+  } catch (e) {
+    console.warn('[ticket-probe] start failed', e?.message || e)
+  }
   try {
     vmTestSchedule.start()
   } catch (e) {
