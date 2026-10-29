@@ -47,6 +47,9 @@ export type OpsTicketPolicy = {
   fingerprint_mode: 'off' | 'device' | 'session' | 'full'
   allow_official_only: boolean
   compact_mode: 'auto' | 'on' | 'off'
+  window_cost_limit_usd: number
+  window_cost_hours: number
+  rpm_strategy: 'tiered' | 'sticky_exempt'
 }
 
 export type OpsIqResult = {

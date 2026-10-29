@@ -314,6 +314,47 @@ export function PolicyCard({ policy }: { policy: OpsTicketPolicy }) {
           </span>
         </label>
         <div className='space-y-1.5 rounded-md border p-2.5 text-xs'>
+          <Label className='text-xs'>窗口成本上限（USD，0 = 不限）</Label>
+          <div className='flex items-center gap-1.5'>
+            <Input
+              type='number'
+              min={0}
+              step={0.5}
+              className='h-8 text-xs'
+              value={draft.window_cost_limit_usd}
+              onChange={(e) => patch({ window_cost_limit_usd: Number(e.target.value) || 0 })}
+            />
+            <span className='shrink-0 text-[11px] text-muted-foreground'>/ 每</span>
+            <Input
+              type='number'
+              min={1}
+              max={168}
+              className='h-8 w-[70px] text-xs'
+              value={draft.window_cost_hours}
+              onChange={(e) => patch({ window_cost_hours: Math.max(1, Number(e.target.value) || 5) })}
+            />
+            <span className='shrink-0 text-[11px] text-muted-foreground'>小时</span>
+          </div>
+          <p className='text-[11px] text-muted-foreground'>
+            超过上限的槽位暂停参与调度，直到窗口滑过去。
+          </p>
+        </div>
+        <div className='space-y-1.5 rounded-md border p-2.5 text-xs'>
+          <Label className='text-xs'>RPM 策略</Label>
+          <Select
+            value={draft.rpm_strategy}
+            onValueChange={(value) => patch({ rpm_strategy: value as never })}
+          >
+            <SelectTrigger className='h-8 text-xs'>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value='tiered' className='text-xs'>按套餐分层</SelectItem>
+              <SelectItem value='sticky_exempt' className='text-xs'>粘性会话豁免</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className='space-y-1.5 rounded-md border p-2.5 text-xs'>
           <Label className='text-xs'>指纹收敛</Label>
           <Select
             value={draft.fingerprint_mode}

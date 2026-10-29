@@ -123,6 +123,9 @@ export function normalizeCodexTicketPolicy(raw = {}) {
       ? src.fingerprint_mode
       : 'off',
     allow_official_only: src.allow_official_only === true,
+    window_cost_limit_usd: Number(src.window_cost_limit_usd) > 0 ? Number(src.window_cost_limit_usd) : 0,
+    window_cost_hours: Number(src.window_cost_hours) > 0 ? Math.min(168, Number(src.window_cost_hours)) : 5,
+    rpm_strategy: src.rpm_strategy === 'sticky_exempt' ? 'sticky_exempt' : 'tiered',
     compact_mode: ['auto', 'on', 'off'].includes(src.compact_mode) ? src.compact_mode : 'auto',
     edge_auto: src.edge_auto !== false,
     edge_auto_interval_seconds: int(src.edge_auto_interval_seconds, 600, 60, 86_400),

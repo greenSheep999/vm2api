@@ -243,6 +243,7 @@ export function pickCodexCandidates(
     ownerScope = null,
     overflow = false,
     ticketGate = null,
+    budgetExcluded = null,
   } = {},
 ) {
   const pin = pinnedVmId(req)
@@ -268,6 +269,7 @@ export function pickCodexCandidates(
   }
   for (const item of listVms(projectRoot, { codex: { quota: routingPolicy } })) {
     if (!isCodexVm(item)) continue
+    if (budgetExcluded?.has?.(item.id)) continue
     syncCodexQuotaSchedule(projectRoot, getVm(projectRoot, item.id) || item, {
       policy: routingPolicy,
     })
@@ -777,6 +779,27 @@ export async function handleCodexProtocol({
       for (const [key, snap] of snaps) ticketVerdicts.set(key, snap.probe_verdict || snap.verdict || null)
     } catch {}
   }
+  // 窗口成本预算：超过上限的槽位不参与候选（滚动窗口聚合 usage_logs）。
+  const budgetLimit = Number(routing?.codex?.ticket?.window_cost_limit_usd) || 0
+  const budgetHours = Math.min(168, Number(routing?.codex?.ticket?.window_cost_hours) || 5)
+  let budgetExcluded = null
+  if (budgetLimit > 0) {
+    try {
+      const { slotOverBudget } = await import('../pool/slot-budget.mjs')
+      const { db } = await import('../db/index.mjs')
+      const conn = db?.()
+      if (conn) {
+        budgetExcluded = new Set()
+        for (const item of listVms(projectRoot)) {
+          if (!isCodexVm(item)) continue
+          if (slotOverBudget(conn, item.id, { limitUsd: budgetLimit, windowMs: budgetHours * 3600_000 })) {
+            budgetExcluded.add(item.id)
+          }
+        }
+        if (!budgetExcluded.size) budgetExcluded = null
+      }
+    } catch {}
+  }
   const pickOpts = {
     stickyRouter,
     sessions,
@@ -785,6 +808,7 @@ export async function handleCodexProtocol({
     routing,
     ownerScope,
     ticketGate: ticketGateEnabled ? { enabled: true, verdicts: ticketVerdicts } : null,
+    budgetExcluded,
   }
   const deadline = Date.now() + codexWaitTimeoutMs(routing)
   const gone = clientGoneSignal(req, res)
