@@ -3,6 +3,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Activity, AlertTriangle, Boxes, Brain, Handshake, Loader2, Play, TicketCheck } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Progress } from '@/components/ui/progress'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Link } from '@tanstack/react-router'
@@ -522,12 +528,12 @@ export function HarvestPane() {
                 </div>
               ) : null}
 
-              {/* 统一操作栏：作用于勾选的模型（没勾选 = 全部） */}
+              {/* 操作栏：只留两个高频动作，其余收进「更多」，避免按钮堆成一片 */}
               <div className='mt-2 flex flex-wrap items-center gap-1.5 border-t pt-2'>
                 <span className='mr-1 text-[10px] text-muted-foreground'>
-                  按槽操作 · {a.models.length} 个模型
+                  {a.models.length} 个模型
                 </span>
-                <Button size='sm' variant='outline' className='h-8 px-3 text-xs' disabled={batchBusy?.vmId === a.id}
+                <Button size='sm' className='h-8 px-3 text-xs' disabled={batchBusy?.vmId === a.id}
                   onClick={() => void runBatch(a.id, 'ticket')}>
                   {batchBusy?.vmId === a.id && batchBusy.kind === 'ticket' ? <Loader2 className='mr-1.5 h-3.5 w-3.5 animate-spin' /> : <Play className='mr-1.5 h-3.5 w-3.5' />}打票
                 </Button>
@@ -535,14 +541,21 @@ export function HarvestPane() {
                   onClick={() => void runBatch(a.id, 'probe')}>
                   <Activity className='mr-1.5 h-3.5 w-3.5' />探针
                 </Button>
-                <Button size='sm' variant='outline' className='h-8 px-3 text-xs' disabled={batchBusy?.vmId === a.id}
-                  onClick={() => void runBatch(a.id, 'borrow')}>
-                  <Handshake className='mr-1.5 h-3.5 w-3.5' />借票
-                </Button>
-                <Button size='sm' variant='outline' className='h-8 px-3 text-xs' disabled={batchBusy?.vmId === a.id}
-                  onClick={() => void runBatch(a.id, 'candy')}>
-                  <Brain className='mr-1.5 h-3.5 w-3.5' />能力题
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button size='sm' variant='ghost' className='h-8 px-2 text-xs' disabled={batchBusy?.vmId === a.id}>
+                      更多 ▾
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align='end'>
+                    <DropdownMenuItem onClick={() => void runBatch(a.id, 'borrow')}>
+                      <Handshake className='mr-2 h-3.5 w-3.5' />借票
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => void runBatch(a.id, 'candy')}>
+                      <Brain className='mr-2 h-3.5 w-3.5' />能力题
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
           ))}
