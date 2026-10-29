@@ -100,12 +100,15 @@ export function ModelDisplayWithRedirect({
 }) {
   const audit = resolveModelAuditDisplay(row)
   const model = audit.primaryBillingModel
+  const ticket = row.turnStateVerdict
+  const hasChips = Boolean(ticket || audit.secondaryActualModel || audit.effortDowngraded)
   return (
-    <div className='flex min-w-0 flex-col'>
+    <div className='flex min-w-0 flex-col gap-y-0.5'>
+      {/* 第一排：模型 + 思考强度（标签只放强度） */}
       <div className='flex min-w-0 items-center gap-1.5'>
         {model ? <ModelVendorIcon modelId={model} /> : null}
         <span
-          className='cursor-pointer truncate hover:underline'
+          className='cursor-pointer truncate text-xs hover:underline'
           onClick={(event) => {
             event.stopPropagation()
             if (model) void copyText(model)
@@ -125,104 +128,84 @@ export function ModelDisplayWithRedirect({
             <ArrowRight className='h-3 w-3' />
           </Badge>
         ) : null}
-        {/* 思考强度跟着模型走：单独一列对不齐，且它本来就是「用哪个档位跑这个模型」。 */}
-        {row.reasoningEffort ? (
-          <ThinkingEffortDisplay effort={row.reasoningEffort} />
-        ) : null}
+        {row.reasoningEffort ? <ThinkingEffortDisplay effort={row.reasoningEffort} /> : null}
       </div>
-      {audit.sentUpstreamModel && audit.sentUpstreamModel !== model ? (
-        <div className='flex min-w-0 items-center gap-1 truncate text-xs text-muted-foreground'>
-          <span className='shrink-0'>↳</span>
-          <span className='truncate'>{audit.sentUpstreamModel}</span>
+
+      {/* 第二排：门票 + 模型一致性 + 上游降档，有才显示 */}
+      {hasChips ? (
+        <div className='flex min-w-0 flex-wrap items-center gap-1'>
+          {ticket ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant='outline'
+                  className={cn(
+                    'shrink-0 cursor-help px-1 text-[10px] leading-tight',
+                    ticket === 'ok'
+                      ? 'border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-300'
+                      : 'border-rose-300 text-rose-700 dark:border-rose-700 dark:text-rose-300'
+                  )}
+                >
+                  {ticket === 'ok'
+                    ? `满血${row.turnStateLen ? ` · ${row.turnStateLen}字` : ''}`
+                    : ticket === 'absent'
+                      ? '降智 · 无票'
+                      : '票异常'}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent className='max-w-xs space-y-1 text-xs'>
+                <div className='font-medium'>{ticket === 'ok' ? '账号满血' : '账号降智'}</div>
+                <div>
+                  门票: {ticket === 'ok' ? '正常' : ticket === 'absent' ? '上游未铸票' : '信封异常'}
+                  {row.turnStateBlocks ? ` · ${row.turnStateBlocks} 块` : ''}
+                </div>
+                <div className='text-primary-foreground/75'>
+                  口径：两发探针（裸打铸票 → 带票续接是否重铸）。
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
+          {audit.secondaryActualModel ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant='outline'
+                  className={cn(
+                    'shrink-0 cursor-help px-1 text-[10px] leading-tight',
+                    audit.downgraded
+                      ? 'border-orange-300 text-orange-700 dark:border-orange-700 dark:text-orange-300'
+                      : 'border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300'
+                  )}
+                >
+                  {audit.downgraded ? '模型不一致' : '模型变体'}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent className='max-w-xs space-y-1 text-xs'>
+                <div className='font-medium'>{audit.downgraded ? '上游降级' : '模型变体'}</div>
+                <div>发往上游: {audit.sentUpstreamModel || '—'}</div>
+                <div>上游返回: {audit.upstreamResponseModel || '—'}</div>
+                <div className='text-primary-foreground/75'>
+                  {audit.downgraded
+                    ? '上游用别的模型回包，计费仍按发往上游的模型计算。'
+                    : '仅名称变体（日期后缀等），视为同一模型。'}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
+          {audit.effortDowngraded ? (
+            <span className='shrink-0 text-[10px] leading-tight text-rose-600 dark:text-rose-400'>
+              ↓ {row.reasoningEffort}→{audit.upstreamEffort}
+            </span>
+          ) : null}
         </div>
       ) : null}
-      {row.turnStateVerdict ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className='flex min-w-0 items-center gap-1 truncate'>
-              <Badge
-                variant='outline'
-                className={cn(
-                  'shrink-0 px-1 text-[10px] leading-tight',
-                  row.turnStateVerdict === 'ok'
-                    ? 'border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-300'
-                    : 'border-rose-300 text-rose-700 dark:border-rose-700 dark:text-rose-300',
-                )}
-              >
-                {row.turnStateVerdict === 'ok'
-                  ? `满血${row.turnStateLen ? ` · ${row.turnStateLen}字` : ''}`
-                  : row.turnStateVerdict === 'absent'
-                    ? '降智 · 无票'
-                    : `票异常${row.turnStateLen ? ` · ${row.turnStateLen}字` : ''}`}
-              </Badge>
-            </div>
-          </TooltipTrigger>
-          <TooltipContent className='max-w-xs space-y-1 text-xs'>
-            <div className='font-medium'>
-              {row.turnStateVerdict === 'ok' ? '账号满血' : '账号降智'}
-            </div>
-            <div>
-              门票: {row.turnStateVerdict === 'ok' ? '正常' : row.turnStateVerdict === 'absent' ? '上游未铸票' : '信封异常'}
-              {row.turnStateBlocks ? ` · ${row.turnStateBlocks} 块` : ''}
-            </div>
-            <div>判定口径: 两发探针（裸打铸票 → 带票续接是否重铸）</div>
-            <div className='text-primary-foreground/75'>
-              {row.turnStateVerdict === 'ok'
-                ? '票延续正常，请求按完整档位服务。'
-                : '无票请求会被当成非 Codex 客户端、可能被降档服务，表现为「变笨」。'}
-            </div>
-          </TooltipContent>
-        </Tooltip>
-      ) : null}
-      {audit.effortDowngraded ? (
-        <div className='flex min-w-0 items-center gap-1 truncate text-xs text-rose-600 dark:text-rose-400'>
-          <span className='shrink-0'>↓ 上游降档:</span>
-          <span className='truncate font-medium'>
-            {row.reasoningEffort} → {audit.upstreamEffort}
-          </span>
-        </div>
-      ) : null}
+
+      {/* 第三排：上游响应（有模型差异才显示） */}
       {audit.secondaryActualModel ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div
-              className={cn(
-                'flex min-w-0 cursor-help items-center gap-1 truncate text-xs',
-                audit.downgraded
-                  ? 'text-orange-600 dark:text-orange-400'
-                  : 'text-amber-600 dark:text-amber-400'
-              )}
-            >
-              <span className='shrink-0'>↳ 上游响应:</span>
-              <span className='truncate font-medium'>
-                {audit.secondaryActualModel}
-              </span>
-              <Badge
-                variant='outline'
-                className={cn(
-                  'shrink-0 px-1 text-[10px]',
-                  audit.downgraded
-                    ? 'border-orange-300 text-orange-700 dark:border-orange-700 dark:text-orange-300'
-                    : 'border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300'
-                )}
-              >
-                {audit.downgraded ? '模型不一致' : '模型变体'}
-              </Badge>
-            </div>
-          </TooltipTrigger>
-          <TooltipContent className='max-w-xs space-y-1 text-xs'>
-            <div className='font-medium'>
-              {audit.downgraded ? '上游降级' : '模型变体'}
-            </div>
-            <div>发往上游: {audit.sentUpstreamModel || '—'}</div>
-            <div>上游返回: {audit.upstreamResponseModel || '—'}</div>
-            <div className='text-primary-foreground/75'>
-              {audit.downgraded
-                ? '上游用别的模型回包，计费仍按发往上游的模型计算。'
-                : '仅名称变体（日期后缀等），视为同一模型。'}
-            </div>
-          </TooltipContent>
-        </Tooltip>
+        <div className='flex min-w-0 items-center gap-1 truncate text-[10px] leading-tight text-muted-foreground'>
+          <span className='shrink-0'>↳ 上游响应:</span>
+          <span className='truncate font-medium'>{audit.upstreamResponseModel}</span>
+        </div>
       ) : null}
     </div>
   )

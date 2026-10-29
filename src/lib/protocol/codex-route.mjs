@@ -112,6 +112,12 @@ export const DEFAULT_CODEX_ROUTING = Object.freeze({
   // falling back to 0.160.0 when the registry is unavailable.
   catalog_client_version: 'auto',
   user_agent: DEFAULT_CODEX_USER_AGENT,
+  /**
+   * 直连模式：绕过预编译 codex kernel，由 Node 直接发上游。
+   * 只有直连才能带全身份头（originator/version/OpenAI-Beta），
+   * 上游才会铸 x-codex-turn-state —— 这是拿回「满血档位」的前提。
+   */
+  direct: false,
   ticket: DEFAULT_CODEX_TICKET,
   upstream_transport: 'prefer_websocket',
   websocket: { enabled: true },
@@ -231,6 +237,7 @@ export function normalizeCodexRouting(raw = {}) {
         ? src.catalog_client_version.trim()
         : 'auto',
     user_agent: normalizeUserAgent(src.user_agent),
+    direct: src.direct === true,
     upstream_transport: normalizeUpstreamTransport(src.upstream_transport),
     websocket: normalizeEnabledToggle(src.websocket, true),
     client_features: normalizeEnabledToggle(src.client_features, false),

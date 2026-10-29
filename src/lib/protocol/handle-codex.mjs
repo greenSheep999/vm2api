@@ -682,7 +682,7 @@ export async function handleCodexProtocol({
   // KIN_CODEX_DIRECT=1 时绕过预编译 kernel，由 Node 直连上游：
   // 只有这条路能把 originator / version / OpenAI-Beta 真正发出去，
   // 上游才会铸 x-codex-turn-state。
-  const directMode = process.env.KIN_CODEX_DIRECT === '1'
+  const directMode = routing?.codex?.direct === true || process.env.KIN_CODEX_DIRECT === '1'
   const hop =
     ops.streamCodexKernel ||
     (directMode

@@ -45,9 +45,52 @@ const FORWARD = [
   'x-openai-subagent',
 ]
 
-function readCredential(exec) {
+function credentialFile(exec) {
   const base = exec?.homeDir ? path.dirname(exec.homeDir) : null
-  const file = base ? path.join(base, 'codex-credentials.json') : null
+  return base ? path.join(base, 'codex-credentials.json') : null
+}
+
+/**
+ * 刷新后的 token 回写凭证文件。
+ * kernel 以前替我们做这件事；不回写的话每个请求都会再刷新一次，等于自造 401 风暴。
+ */
+function persistAccessToken(exec, accessToken) {
+  const file = credentialFile(exec)
+  if (!file || !accessToken) return
+  try {
+    const raw = JSON.parse(fs.readFileSync(file, 'utf8'))
+    const accounts = Array.isArray(raw?.accounts) ? raw.accounts : []
+    if (!accounts.length) return
+    accounts[0].access_token = accessToken
+    accounts[0].expires_at = null
+    fs.writeFileSync(file, JSON.stringify({ ...raw, accounts }, null, 2), { mode: 0o600 })
+  } catch {}
+}
+
+/**
+ * 把上游错误归一成网关认识的形状：
+ *   FastAPI 的 {detail:"..."}  → { error: { type, code, message } }
+ * 否则 isCodexFailoverError 拿不到 code，换槽逻辑会失效。
+ */
+function normalizeErrorBody(status, parsed) {
+  if (parsed?.error?.message) return parsed
+  const detail = parsed?.detail || parsed?.message || ''
+  const message = typeof detail === 'string' ? detail : JSON.stringify(detail)
+  const code =
+    /store must be set to false/i.test(message)
+      ? 'invalid_request_error'
+      : status === 401 || status === 403
+        ? 'upstream_auth'
+        : status === 429
+          ? 'usage_limit_reached'
+          : status >= 500
+            ? 'server_error'
+            : 'upstream_status'
+  return { ...parsed, error: { type: 'upstream_error', code, message } }
+}
+
+function readCredential(exec) {
+  const file = credentialFile(exec)
   if (!file) return null
   try {
     const raw = JSON.parse(fs.readFileSync(file, 'utf8'))
@@ -143,9 +186,15 @@ async function sendUpstream({ body, headers, proxyUrl, timeoutMs, idleTimeoutMs,
             try {
               parsed = JSON.parse(text)
             } catch {
-              parsed = { error: { message: text.slice(0, 500) } }
+              parsed = { detail: text.slice(0, 500) }
             }
-            finish({ ok: false, status: res.statusCode, headers: responseHeaders, body: parsed, committed: false })
+            finish({
+              ok: false,
+              status: res.statusCode,
+              headers: responseHeaders,
+              body: normalizeErrorBody(res.statusCode, parsed),
+              committed: false,
+            })
           })
           return
         }
@@ -203,6 +252,9 @@ async function sendUpstream({ body, headers, proxyUrl, timeoutMs, idleTimeoutMs,
  */
 export async function streamCodexKernelDirect(args = {}) {
   const exec = args.exec || {}
+  // 上游强制要求 store=false（否则 400 "Store must be set to false"）；
+  // stream 必须是 true 才走 SSE。kernel 以前替我们补这两项。
+  const body = { ...(args.body || {}), store: false, stream: true }
   const credential = readCredential(exec)
   if (!credential?.access) {
     return { ok: false, status: 401, headers: {}, body: { error: { code: 'no_access_token', message: 'no codex credentials' } } }
@@ -215,7 +267,7 @@ export async function streamCodexKernelDirect(args = {}) {
   }
 
   let result = await sendUpstream({
-    body: args.body,
+    body,
     headers: buildHeaders(args, credential.access),
     proxyUrl,
     timeoutMs: args.timeoutMs,
@@ -229,8 +281,9 @@ export async function streamCodexKernelDirect(args = {}) {
     const refreshed = await refreshCodexAccessToken({ refreshToken: credential.refresh, proxyUrl }).catch(() => null)
     const nextAccess = refreshed?.access_token || refreshed?.accessToken || ''
     if (nextAccess) {
+      persistAccessToken(exec, nextAccess)
       result = await sendUpstream({
-        body: args.body,
+        body,
         headers: buildHeaders(args, nextAccess),
         proxyUrl,
         timeoutMs: args.timeoutMs,

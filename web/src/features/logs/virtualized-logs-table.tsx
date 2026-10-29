@@ -173,7 +173,7 @@ import { usageLogsBatchQueryOptions } from './queries'
 import { RelativeTime } from './relative-time'
 import { api } from '@/lib/api'
 
-const ROW_HEIGHT = 72
+const ROW_HEIGHT = 84
 const SCROLL_TOP_THRESHOLD = 500
 
 export type DetailTab = 'summary' | 'logic-trace' | 'performance' | 'raw'
@@ -390,7 +390,7 @@ function LogRow({
           />
         </div>
       )}
-      <div className='min-w-[100px] flex-[1.3] px-1.5 font-mono text-xs'>
+      <div className='min-w-[150px] flex-[1.7] px-1.5 font-mono text-xs'>
         {/* 不再套一层「显示模型名」的 tooltip：它和降级行的 tooltip 会同时弹出。 */}
         <div className='flex min-w-0 items-center gap-1 truncate'>
           <ModelDisplayWithRedirect

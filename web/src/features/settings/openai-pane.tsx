@@ -112,6 +112,21 @@ export function OpenaiPane({
             />
           </SettingRow>
           <SettingRow
+            label='直连上游（拿回合门票）'
+            desc={
+              codex.direct === true
+                ? '已开启：绕过预编译 kernel，由网关直接发上游并补齐身份头，上游才会铸 x-codex-turn-state。'
+                : '关闭时走 kernel（不带身份头，上游不铸票，请求按低档服务）。开启后票才会回来。'
+            }
+          >
+            <Switch
+              checked={codex.direct === true}
+              disabled={saving}
+              onCheckedChange={(direct: boolean) => update({ direct })}
+              aria-label='直连上游'
+            />
+          </SettingRow>
+          <SettingRow
             label='上游传输'
             desc={
               wsLive
