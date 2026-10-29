@@ -731,6 +731,11 @@ export class RequestLogStore {
     return this.repo.costByModel(opts)
   }
 
+  /** 智能运营总览（门票/缓存/effort/流量）：直接委托 repo 聚合。 */
+  opsSummary(opts = {}) {
+    return this.repo.opsSummary(opts)
+  }
+
   vmUsageStats(opts = {}) {
     return this.repo.vmUsageStats(opts)
   }
