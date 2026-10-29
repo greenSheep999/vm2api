@@ -71,10 +71,10 @@ export function UpstreamTransportCard({ vm }: { vm: Vm }) {
 
   return (
     <Card>
-      <CardHeader className='pb-2'>
+      <CardHeader className='pb-1.5'>
         <CardTitle className='text-sm'>上游传输</CardTitle>
       </CardHeader>
-      <CardContent className='space-y-3'>
+      <CardContent className='space-y-2.5 pt-0'>
         <div className='flex items-start justify-between gap-3'>
           <div className='space-y-0.5'>
             <Label className='text-xs'>启用 WebSocket</Label>

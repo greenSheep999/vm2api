@@ -29,14 +29,14 @@ export function CodexTicketMiniCard({ vm }: { vm: Vm }) {
 
   return (
     <Card>
-      <CardHeader className='pb-2'>
+      <CardHeader className='pb-1.5'>
         <CardTitle className='text-sm'>门票</CardTitle>
       </CardHeader>
-      <CardContent className='space-y-1'>
+      <CardContent className='pt-0'>
         {models.length === 0 ? (
           <p className='text-[11px] text-muted-foreground'>还没有打票记录</p>
         ) : (
-          models.map((t) => {
+          models.map((t, i) => {
             const chips = t.verdict
               ? [
                   ticketChip({ ticketVerdict: t.verdict, ticketLen: t.len, probeVerdict: t.probe_verdict, model: t.model }),
@@ -44,8 +44,14 @@ export function CodexTicketMiniCard({ vm }: { vm: Vm }) {
                 ]
               : [{ label: '未打票', tone: 'muted' as const, hint: '还没打过票' }]
             return (
-              <div key={t.model} className='flex items-center justify-between gap-2 text-[11px]'>
-                <span className='truncate font-mono'>{t.model}</span>
+              <div
+                key={t.model}
+                className={cn(
+                  'flex items-center justify-between gap-3 py-1 text-[11px]',
+                  i > 0 && 'border-t border-border/50',
+                )}
+              >
+                <span className='truncate font-mono leading-none'>{t.model}</span>
                 <span className='flex shrink-0 items-center gap-1'>
                   {chips.map((chip) => (
                     <span

@@ -154,8 +154,6 @@ function VmDetailBody({
   const routing = useQuery({ ...routingQueryOptions(), enabled: perms.admin })
   usePoolSeatStream()
 
-  const tabs = vmDetailTabs(perms)
-  const tab = visibleTab(wantedTab, tabs)
 
   const [bindId, setBindId] = useState('')
   const [confirmDel, setConfirmDel] = useState(false)
@@ -167,6 +165,9 @@ function VmDetailBody({
     (perms.dashboard ? dash.data?.vms : slots.data?.items) || []
   const listVm = slotList.find((v) => v.id === id)
   const vm = ((data.vm as Vm | undefined) || listVm || { id }) as Vm
+  // 种子页签只对 Claude 槽位有意义，GPT 槽位不显示（按 provider 判定）。
+  const tabs = vmDetailTabs(perms, isCodexVm(vm) ? 'codex' : null)
+  const tab = visibleTab(wantedTab, tabs)
   const kernel = (data.kernel as VmKernelSnapshot | undefined) || null
   const acc = (data.account as Record<string, unknown> | undefined) || {}
   const proxy = ((data.proxy as VmProxySnap | undefined) ||

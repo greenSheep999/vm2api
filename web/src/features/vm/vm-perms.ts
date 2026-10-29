@@ -70,10 +70,18 @@ export function useVmPerms(): VmPerms {
 export type VmDetailTab =
   'overview' | 'account' | 'proxy' | 'test' | 'ops' | 'seed'
 
-export function vmDetailTabs(perms: VmPerms): VmDetailTab[] {
+/**
+ * 页签可见性。kind 用来做 provider 判定：
+ * 「种子」是 Claude 的预热/种子会话概念，GPT 槽位没有这个东西，
+ * 之前不看 provider 一律显示，GPT 槽里点开是一堆无意义的开关。
+ */
+export function vmDetailTabs(perms: VmPerms, kind?: string | null): VmDetailTab[] {
   const tabs: VmDetailTab[] = ['overview', 'account', 'proxy']
   if (perms.test) tabs.push('test')
-  if (perms.admin) tabs.push('ops', 'seed')
+  if (perms.admin) {
+    tabs.push('ops')
+    if (kind !== 'codex') tabs.push('seed')
+  }
   return tabs
 }
 

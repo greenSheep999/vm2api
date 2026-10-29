@@ -146,7 +146,7 @@ function CardBody({ vm, accounts }: { vm: Vm; accounts?: UsageAccountRow[] }) {
 
       {/* 按 provider 显示专属设置：GPT 有门票与上游传输，Claude 有缓存档位。 */}
       {isCodexVm(vm) ? (
-        <div className='grid gap-2 sm:grid-cols-2'>
+        <div className='space-y-2'>
           <UpstreamTransportCard vm={vm} />
           <CodexTicketMiniCard vm={vm} />
         </div>

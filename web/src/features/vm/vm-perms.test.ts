@@ -56,6 +56,12 @@ describe('vmPermsFor follows panel-acl roles', () => {
 })
 
 describe('vmDetailTabs', () => {
+  it('GPT 槽位不显示「种子」页签（种子是 Claude 的概念）', () => {
+    expect(vmDetailTabs(vmPermsFor('admin'), 'codex')).not.toContain('seed')
+    expect(vmDetailTabs(vmPermsFor('admin'), 'claude')).toContain('seed')
+    expect(vmDetailTabs(vmPermsFor('admin'))).toContain('seed')
+  })
+
   it('ops and seed are admin only; test needs test permission', () => {
     expect(vmDetailTabs(vmPermsFor('admin'))).toEqual([
       'overview',
