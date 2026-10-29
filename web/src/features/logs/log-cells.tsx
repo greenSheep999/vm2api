@@ -153,7 +153,7 @@ export function ModelDisplayWithRedirect({
                   : 'border-rose-300 text-rose-700 dark:border-rose-700 dark:text-rose-300',
               )}
             >
-              {ticket === 'ok' ? `有票 · ${row.turnStateLen ?? 0}字` : ticket === 'absent' ? '无票' : '票异常'}
+              {ticket === 'ok' ? `有票·${row.turnStateLen ?? 0}字` : ticket === 'absent' ? '无票' : '票异常'}
             </Badge>
           ) : null}
           {row.probeVerdict ? (

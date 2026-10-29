@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Activity, AlertTriangle, Boxes, Brain, Handshake, Loader2, Play, TicketCheck } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Progress } from '@/components/ui/progress'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Link } from '@tanstack/react-router'
 import { api } from '@/lib/api'
@@ -482,7 +483,7 @@ export function HarvestPane() {
                       </span>
                       <span className='flex-1 truncate text-[11px] text-muted-foreground'>
                         {t.verdict === 'ok'
-                          ? `票 ${t.len ?? 0} 字 · ${remainingText(t)}`
+                          ? `票 ${t.len ?? 0}字·${remainingText(t)}`
                           : t.verdict === 'absent'
                             ? '上游未铸票'
                             : '票异常'}
@@ -527,15 +528,17 @@ export function HarvestPane() {
                   <Brain className='mr-1.5 h-3.5 w-3.5' />能力题
                 </Button>
                 {batchBusy?.vmId === a.id ? (
-                  <span className='ml-1 flex items-center gap-2 text-[10px] text-primary'>
-                    <span className='font-mono'>{batchBusy.current}</span>
-                    <span className='h-1.5 w-24 overflow-hidden rounded bg-primary/15'>
-                      <span
-                        className='block h-full bg-primary transition-all'
-                        style={{ width: `${Math.round((batchBusy.done / Math.max(1, batchBusy.total)) * 100)}%` }}
-                      />
+                  <span className='ml-auto flex items-center gap-2 text-[10px]'>
+                    <span className='text-muted-foreground'>
+                      {batchBusy.kind === 'ticket' ? '打票' : batchBusy.kind === 'probe' ? '探针' : batchBusy.kind === 'borrow' ? '借票' : '能力题'}
+                      中
                     </span>
-                    <span className='font-mono'>
+                    <span className='font-mono text-foreground'>{batchBusy.current}</span>
+                    <Progress
+                      value={Math.round((batchBusy.done / Math.max(1, batchBusy.total)) * 100)}
+                      className='h-1 w-24'
+                    />
+                    <span className='font-mono text-muted-foreground'>
                       {batchBusy.done}/{batchBusy.total}
                     </span>
                   </span>
