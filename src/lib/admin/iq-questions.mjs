@@ -163,14 +163,17 @@ const BUILTIN = [
   },
 ]
 
+/**
+ * 幂等补齐内置题：以前只在空表时播种，导致后续新增的内置题永远进不来。
+ * 现在每次调用都按 id 补齐缺失项；已存在的不覆盖（保留运营可能做的调整）。
+ */
 export function ensureBuiltinQuestions() {
-  const count = db().prepare('SELECT COUNT(*) AS n FROM iq_questions').get()?.n || 0
-  if (count > 0) return listQuestions()
   const at = nowIso()
   const insert = db().prepare(
-    `INSERT OR REPLACE INTO iq_questions
+    `INSERT INTO iq_questions
        (id, title, kind, prompt, judge_rule, expected, auto_support, builtin, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+     ON CONFLICT(id) DO NOTHING`,
   )
   for (const q of BUILTIN) {
     insert.run(q.id, q.title, q.kind, q.prompt, q.judge_rule, q.expected, q.auto_support, at, at)
