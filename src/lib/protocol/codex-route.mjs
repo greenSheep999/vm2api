@@ -37,7 +37,7 @@ export const DEFAULT_CODEX_TICKET = Object.freeze({
   /** 候选边缘节点；空 = 由 DNS 决定（等价于现状）。 */
   edge_ips: Object.freeze([]),
   /** 票被真实请求用过之后，异步补一发糖果题，只记录能力值，不参与判定。 */
-  candy_observation: false,
+  candy_observation: true,
   /** 无有效票时把账号移出调度（sub 的「无票时暂停目标模型」）。 */
   gate_scheduling: false,
   /** 定时探针间隔（秒）；0 = 关闭自动探针。 */
@@ -97,7 +97,8 @@ export function normalizeCodexTicketPolicy(raw = {}) {
       32,
     ),
     edge_direct: src.edge_direct === true,
-    candy_observation: src.candy_observation === true,
+    // 默认开启：老配置里没有这个字段时也算开启，显式 false 才关闭。
+    candy_observation: src.candy_observation !== false,
     gate_scheduling: src.gate_scheduling === true,
     probe_interval_seconds: int(src.probe_interval_seconds, 0, 0, 86_400),
     auto_park: src.auto_park === true,
