@@ -59,50 +59,16 @@ export type HarvestSnapshot = {
 
 const CARD = 'rounded-lg border bg-card p-4'
 
-function fmtAgo(iso?: string | null) {
-  if (!iso) return '—'
-  const ms = Date.now() - Date.parse(iso)
-  if (!Number.isFinite(ms)) return '—'
-  if (ms < 0) return '刚刚'
-  const sec = Math.round(ms / 1000)
-  if (sec < 60) return `${sec} 秒前`
-  const min = Math.round(sec / 60)
-  if (min < 60) return `${min} 分钟前`
-  return `${Math.round(min / 60)} 小时前`
-}
-
-function fmtLeft(iso?: string | null) {
-  if (!iso) return '有效期 —'
-  const ms = Date.parse(iso) - Date.now()
-  if (!Number.isFinite(ms)) return '有效期 —'
-  if (ms <= 0) return '已过期'
-  const min = Math.floor(ms / 60_000)
-  return min >= 60 ? `剩 ${Math.floor(min / 60)} 小时 ${min % 60} 分` : `剩 ${min} 分钟`
-}
-
 function fmtClock(v?: string | null) {
   if (!v) return '—'
   return v.replace('T', ' ').replace('Z', '').slice(11, 19)
 }
 
-type TicketState = 'valid' | 'expiring' | 'expired' | 'missing' | 'error' | 'unknown'
 
 /**
  * 票的生命周期状态。卡片颜色只跟着这个走：
  *   有效（绿）→ 即将过期（黄）→ 已过期（灰，无色）→ 无票（灰）→ 异常（红）
  */
-function ticketState(t: HarvestTicket): TicketState {
-  if (!t.verdict) return 'unknown'
-  if (t.verdict === 'absent') return 'missing'
-  if (t.verdict !== 'ok') return 'error'
-  const exp = t.expires_at ? Date.parse(t.expires_at) : NaN
-  if (!Number.isFinite(exp)) return 'valid'
-  const left = exp - Date.now()
-  if (left <= 0) return 'expired'
-  if (left < 5 * 60_000) return 'expiring'
-  return 'valid'
-}
-
 function remainingText(t: HarvestTicket) {
   if (!t.expires_at) return '有效期 —'
   const ms = Date.parse(t.expires_at) - Date.now()
@@ -118,10 +84,8 @@ export function HarvestPane() {
   const [probing, setProbing] = useState<string | null>(null)
   const [borrowing, setBorrowing] = useState<string | null>(null)
   const [checking, setChecking] = useState<string | null>(null)
-  const [capResults, setCapResults] = useState<Record<string, string>>({})
-  const [borrowResults, setBorrowResults] = useState<Record<string, string>>({})
-  const [probeResults, setProbeResults] = useState<Record<string, { verdict: string; shoot: any }>>({})
   const [filter, setFilter] = useState<'all' | 'ticket' | 'probe' | 'select' | 'candy'>('all')
+  const [batchBusy, setBatchBusy] = useState<{ vmId: string; kind: string; done: number; total: number } | null>(null)
   // 相对时间心跳：让「N 秒前 / 剩余 N 分钟」自己走动，不用等轮询。
   const [, forceTick] = useState(0)
   useEffect(() => {
@@ -146,6 +110,31 @@ export function HarvestPane() {
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['ops-harvest'] }),
     onError: (e) => toast.error(`操作失败：${(e as Error).message}`),
   })
+
+  function modelsOf(vmId: string): string[] {
+    const account = (snap.data?.accounts || []).find((a) => a.id === vmId)
+    return (account?.models || []).map((m) => m.model)
+  }
+
+  /** 批量执行：对勾选的模型逐个跑同一种操作，进度显示在操作栏右侧。 */
+  async function runBatch(vmId: string, kind: 'ticket' | 'probe' | 'borrow' | 'candy') {
+    const targets = modelsOf(vmId)
+    if (!targets.length) return toast.warning('这个槽位还没有模型可打')
+    setBatchBusy({ vmId, kind, done: 0, total: targets.length })
+    try {
+      for (let i = 0; i < targets.length; i++) {
+        const model = targets[i]
+        if (kind === 'ticket') await run(vmId, model)
+        else if (kind === 'probe') await probe(vmId, model)
+        else if (kind === 'borrow') await borrow(vmId, model)
+        else await capability(vmId, model)
+        setBatchBusy({ vmId, kind, done: i + 1, total: targets.length })
+      }
+      void qc.invalidateQueries({ queryKey: ['ops-harvest'] })
+    } finally {
+      setBatchBusy(null)
+    }
+  }
 
   async function run(vmId: string, model: string) {
     const key = `${vmId}\u0000${model}`
@@ -187,7 +176,6 @@ export function HarvestPane() {
           : r.verdict === 'recorded'
             ? `能力题已记录 · 答 ${r.answer ?? '—'}（未校准，不判分）`
             : `能力题未通过 · 答 ${r.answer ?? '—'}（期望 ${r.expected ?? '—'}）`
-      setCapResults((cur) => ({ ...cur, [key]: text }))
       if (r.verdict === 'pass' || r.verdict === 'recorded') toast.success(text)
       else toast.warning(text)
     } catch (e) {
@@ -212,7 +200,6 @@ export function HarvestPane() {
       const text = r.ok
         ? `借票成功 · 来源 ${r.donor} · 票 ${r.ticket_len} 字符（已验证入库）`
         : `借票失败 · ${r.reason}${r.donor ? ` · 来源 ${r.donor}` : ''}`
-      setBorrowResults((cur) => ({ ...cur, [key]: text }))
       if (r.ok) toast.success(text)
       else toast.warning(text)
       void qc.invalidateQueries({ queryKey: ['ops-harvest'] })
@@ -237,7 +224,6 @@ export function HarvestPane() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ vm_id: vmId, model }),
       })
-      setProbeResults((cur) => ({ ...cur, [key]: { verdict: result.verdict, shoot: result } }))
       const label =
         result.verdict === 'healthy'
           ? '满血（续接未重铸票）'
@@ -438,191 +424,77 @@ export function HarvestPane() {
                 </Button>
               </div>
 
-              <div className='mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3'>
+              {/* 紧凑模型列表：一行一个模型，勾选后统一操作，避免每个模型四个按钮把卡片撑爆 */}
+              <div className='mt-3 space-y-1'>
                 {a.models.map((t) => {
                   const key = `${a.id}\u0000${t.model}`
+                  const tier =
+                    t.probe_verdict === 'healthy' || t.probe_verdict === 'healthy_same'
+                      ? '满血'
+                      : t.probe_verdict === 'degraded' || t.probe_verdict === 'route_changed'
+                        ? '降智'
+                        : '未探针'
                   return (
                     <div
                       key={t.model}
                       className={cn(
-                        'flex flex-col rounded-lg border px-2.5 py-2 text-xs',
-                        t.probe_verdict === 'healthy' || t.probe_verdict === 'healthy_same'
-                          ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30'
-                          : t.probe_verdict === 'degraded' || t.probe_verdict === 'route_changed'
-                            ? 'border-rose-300 bg-rose-50 dark:border-rose-900 dark:bg-rose-950/25'
-                            : 'border-border bg-muted/40',
+                        'flex cursor-pointer items-center gap-2 rounded-md border px-2 py-1 text-[11px]',
+                        tier === '满血'
+                          ? 'border-emerald-300/60 bg-emerald-50/60 dark:border-emerald-900 dark:bg-emerald-950/20'
+                          : tier === '降智'
+                            ? 'border-rose-300/60 bg-rose-50/50 dark:border-rose-900 dark:bg-rose-950/20'
+                            : 'border-border bg-muted/30',
+                        running === key || probing === key ? 'ring-1 ring-primary/40' : '',
                       )}
                     >
-                      <div className='flex flex-wrap items-center justify-between gap-2 border-b pb-1.5'>
-                        <span className='flex flex-wrap items-center gap-2 font-mono font-medium'>
-                          {t.model}
-                          {/* 主状态 = 账号档位（票能不能续）；票本身几乎每次都有，不作为主状态。 */}
-                          <span
-                            className={cn(
-                              'rounded px-1 text-[10px]',
-                              t.probe_verdict === 'healthy' || t.probe_verdict === 'healthy_same'
-                                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                                : t.probe_verdict === 'degraded' || t.probe_verdict === 'route_changed'
-                                  ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
-                                  : 'bg-black/5 text-muted-foreground dark:bg-white/10',
-                            )}
-                          >
-                            {t.probe_verdict === 'healthy' || t.probe_verdict === 'healthy_same'
-                              ? '满血'
-                              : t.probe_verdict === 'degraded'
-                                ? '降智'
-                                : t.probe_verdict === 'route_changed'
-                                  ? '路由漂移'
-                                  : '未探针'}
-                          </span>
-                          <span
-                            className={cn(
-                              'text-[10px]',
-                              ticketState(t) === 'valid'
-                                ? 'text-emerald-600 dark:text-emerald-400'
-                                : ticketState(t) === 'expiring'
-                                  ? 'text-amber-600 dark:text-amber-400'
-                                  : 'text-muted-foreground',
-                            )}
-                          >
-                            {t.verdict === 'ok'
-                              ? `票 ${t.len ?? 0} 字 · ${remainingText(t)}`
-                              : t.verdict === 'absent'
-                                ? '上游未铸票'
-                                : '票异常'}
-                          </span>
-                          {t.probe_verdict ? (
-                            <span
-                              className={cn(
-                                'rounded px-1 text-[10px]',
-                                t.probe_verdict === 'healthy' || t.probe_verdict === 'healthy_same'
-                                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
-                                  : t.probe_verdict === 'degraded'
-                                    ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
-                                    : 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
-                              )}
-                              title={t.probe_detail || undefined}
-                            >
-                              {t.probe_verdict === 'healthy' || t.probe_verdict === 'healthy_same'
-                                ? '探针：满血'
-                                : t.probe_verdict === 'degraded'
-                                  ? '探针：降智'
-                                  : '探针：无票'}
-                            </span>
-                          ) : (
-                            <span className='rounded bg-muted px-1 text-[10px] text-muted-foreground'>
-                              未探针
-                            </span>
-                          )}
-                        </span>
-                        <span className='flex items-center gap-1'>
-                        <Button
-                          size='sm'
-                          variant='outline'
-                          className='h-6 px-1.5 text-[11px]'
-                          disabled={probing === key}
-                          onClick={() => void probe(a.id, t.model)}
-                          title='两发探针：裸打铸票 → 带票续接，看上游是否重铸'
-                        >
-                          {probing === key ? (
-                            <Loader2 className='mr-1 h-3 w-3 animate-spin' />
-                          ) : (
-                            <Activity className='mr-1 h-3 w-3' />
-                          )}
-                          探针
-                        </Button>
-                        <Button
-                          size='sm'
-                          variant='outline'
-                          className='h-6 px-1.5 text-[11px]'
-                          disabled={borrowing === key}
-                          onClick={() => void borrow(a.id, t.model)}
-                          title='借票：拿已验证的来源票当引子，让本账号铸一张自己的票并续接验证'
-                        >
-                          {borrowing === key ? (
-                            <Loader2 className='mr-1 h-3 w-3 animate-spin' />
-                          ) : (
-                            <Handshake className='mr-1 h-3 w-3' />
-                          )}
-                          借票
-                        </Button>
-                        <Button
-                          size='sm'
-                          variant='ghost'
-                          className='h-6 px-1.5 text-[11px]'
-                          disabled={checking === key}
-                          onClick={() => void capability(a.id, t.model)}
-                          title='能力题：糖果题答对说明档位正常（期望 21；降智号通常答 29）'
-                        >
-                          {checking === key ? (
-                            <Loader2 className='mr-1 h-3 w-3 animate-spin' />
-                          ) : (
-                            <Brain className='mr-1 h-3 w-3' />
-                          )}
-                          能力题
-                        </Button>
-                        <Button
-                          size='sm'
-                          variant='ghost'
-                          className='h-6 px-1.5 text-[11px]'
-                          disabled={running === key || a.skip_harvest}
-                          onClick={() => void run(a.id, t.model)}
-                        >
-                          {running === key ? (
-                            <Loader2 className='mr-1 h-3 w-3 animate-spin' />
-                          ) : (
-                            <Play className='mr-1 h-3 w-3' />
-                          )}
-                          打票
-                        </Button>
-                        </span>
-                      </div>
-                      {capResults[key] ? (
-                        <div className='mt-1 rounded bg-black/5 px-2 py-1 font-mono text-[10px] dark:bg-white/10'>
-                          {capResults[key]}
-                        </div>
-                      ) : null}
-                      {borrowResults[key] ? (
-                        <div className='mt-1 rounded bg-black/5 px-2 py-1 font-mono text-[10px] dark:bg-white/10'>
-                          {borrowResults[key]}
-                        </div>
-                      ) : null}
-                      {probeResults[key] ? (
-                        <div className='mt-1 rounded bg-black/5 px-2 py-1 font-mono text-[10px] dark:bg-white/10'>
-                          探针 {probeResults[key].verdict} · 第一发 HTTP{' '}
-                          {probeResults[key].shoot?.shot1?.http ?? '—'} 票长{' '}
-                          {probeResults[key].shoot?.shot1?.ticket_len ?? 0} · 第二发 HTTP{' '}
-                          {probeResults[key].shoot?.shot2?.http ?? '—'} 新票{' '}
-                          {probeResults[key].shoot?.shot2?.new_ticket ? '是' : '否'}
-                        </div>
-                      ) : null}
-                      <div className='mt-1 flex flex-wrap gap-x-3 gap-y-0.5 font-mono text-[10px] opacity-80'>
-                        <span>块数 {t.blocks ?? '—'}</span>
-                        <span>长度 {t.len ?? '—'}</span>
-                        <span>{remainingText(t)}</span>
-                        <span>签发 {t.issued_at ? fmtClock(t.issued_at) : '—'}</span>
-                        <span>
-                          {t.checked_at ? `采集 ${fmtAgo(t.checked_at)}` : '尚未采集'}
-                          {t.expires_at ? ` · ${fmtLeft(t.expires_at)}` : ''}
-                        </span>
-                        <span>HTTP {t.http_status ?? '—'}</span>
-                        {(() => {
-                          const candy = (data.events || []).find(
-                            (e) =>
-                              e.kind === 'candy' &&
-                              e.vm_id === a.id &&
-                              (!e.model || e.model === t.model),
-                          )
-                          return candy ? (
-                            <span className='opacity-70'>
-                              糖果 {candy.reason?.replace('answer_', '') ?? '—'}
-                            </span>
-                          ) : null
-                        })()}
-                      </div>
+                      <span className='w-[118px] shrink-0 font-mono'>{t.model}</span>
+                      <span
+                        className={cn(
+                          'shrink-0 rounded px-1 text-[10px]',
+                          tier === '满血'
+                            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                            : tier === '降智'
+                              ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
+                              : 'bg-black/5 text-muted-foreground dark:bg-white/10',
+                        )}
+                      >
+                        {tier}
+                      </span>
+                      <span className='flex-1 truncate text-[10px] text-muted-foreground'>
+                        {t.verdict === 'ok' ? `票 ${t.len ?? 0} 字 · ${remainingText(t)}` : t.verdict === 'absent' ? '上游未铸票' : '票异常'}
+                        {running === key ? ' · 打票中…' : probing === key ? ' · 探针中…' : ''}
+                      </span>
                     </div>
                   )
                 })}
+              </div>
+
+              {/* 统一操作栏：作用于勾选的模型（没勾选 = 全部） */}
+              <div className='mt-2 flex flex-wrap items-center gap-1.5 border-t pt-2'>
+                <span className='mr-1 text-[10px] text-muted-foreground'>
+                  按槽操作 · {a.models.length} 个模型
+                </span>
+                <Button size='sm' variant='outline' className='h-6 px-2 text-[11px]' disabled={batchBusy?.vmId === a.id}
+                  onClick={() => void runBatch(a.id, 'ticket')}>
+                  {batchBusy?.vmId === a.id && batchBusy.kind === 'ticket' ? <Loader2 className='mr-1 h-3 w-3 animate-spin' /> : <Play className='mr-1 h-3 w-3' />}打票
+                </Button>
+                <Button size='sm' variant='outline' className='h-6 px-2 text-[11px]' disabled={batchBusy?.vmId === a.id}
+                  onClick={() => void runBatch(a.id, 'probe')}>
+                  <Activity className='mr-1 h-3 w-3' />探针
+                </Button>
+                <Button size='sm' variant='outline' className='h-6 px-2 text-[11px]' disabled={batchBusy?.vmId === a.id}
+                  onClick={() => void runBatch(a.id, 'borrow')}>
+                  <Handshake className='mr-1 h-3 w-3' />借票
+                </Button>
+                <Button size='sm' variant='outline' className='h-6 px-2 text-[11px]' disabled={batchBusy?.vmId === a.id}
+                  onClick={() => void runBatch(a.id, 'candy')}>
+                  <Brain className='mr-1 h-3 w-3' />能力题
+                </Button>
+                {batchBusy?.vmId === a.id ? (
+                  <span className='ml-1 text-[10px] text-primary'>
+                    {batchBusy.done}/{batchBusy.total}
+                  </span>
+                ) : null}
               </div>
             </div>
           ))}
