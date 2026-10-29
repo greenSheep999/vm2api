@@ -1049,6 +1049,18 @@ export async function handleCodexProtocol({
             return json(res, 200, body)
           }
           if (!res.headersSent) writeSSEHeaders(res)
+          // new-api 等 OpenAI 兼容网关把「没有 [DONE]」当 EOF，判成流被截断，
+          // 客户端随即报 stream closed before response.completed 并重连。
+          // 上游 Responses 本来不发 [DONE]，这里补一个（可用 KIN_CODEX_SSE_DONE=0 关闭）。
+          if (
+            stream &&
+            protocol === 'openai.responses' &&
+            process.env.KIN_CODEX_SSE_DONE !== '0'
+          ) {
+            try {
+              res.write('data: [DONE]\n\n')
+            } catch {}
+          }
           return res.end()
         }
         reportOpenAIAttempt(vm.id, attemptKind, result?.ttftMs ?? null)
