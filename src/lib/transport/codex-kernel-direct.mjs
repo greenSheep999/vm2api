@@ -221,6 +221,11 @@ async function sendUpstream({ body, headers, proxyUrl, timeoutMs, idleTimeoutMs,
     let ttftMs = null
     let sawCompleted = false
     let sawData = false
+    // 首字之前不转发：只发元事件（response.created 等）时上游就断，
+    // 客户端会看到未完成的流并重连。缓冲到第一个内容事件再放行，
+    // 这样早期断开可以静默换号重试。
+    let flushed = false
+    const pending = []
     let settled = false
     let lastDataAt = Date.now()
     let heartbeat = null
@@ -282,7 +287,7 @@ async function sendUpstream({ body, headers, proxyUrl, timeoutMs, idleTimeoutMs,
 
         // 思考期上游可能长时间不发数据：给客户端打 SSE 注释心跳，别让客户端读超时。
         heartbeat = setInterval(() => {
-          if (settled || Date.now() - lastDataAt < 15_000) return
+          if (settled || !flushed || Date.now() - lastDataAt < 15_000) return
           try {
             onLine(': keepalive')
           } catch {}
@@ -296,14 +301,28 @@ async function sendUpstream({ body, headers, proxyUrl, timeoutMs, idleTimeoutMs,
           while ((idx = buffer.indexOf('\n')) >= 0) {
             const line = buffer.slice(0, idx).replace(/\r$/, '')
             buffer = buffer.slice(idx + 1)
-            if (!sawData && /"type"\s*:\s*"response\.(output_text|reasoning|output_item)\./.test(line)) {
+            const contentful = /"type"\s*:\s*"(response\.(output_text|reasoning|output_item|function_call)\.|response\.completed)/.test(line)
+            if (!sawData && contentful) {
               sawData = true
               ttftMs = Date.now() - startedAt
             }
             if (line.includes('response.completed')) sawCompleted = true
-            try {
-              onLine(line)
-            } catch {}
+            if (!flushed) {
+              pending.push(line)
+              if (contentful) {
+                flushed = true
+                for (const item of pending) {
+                  try {
+                    onLine(item)
+                  } catch {}
+                }
+                pending.length = 0
+              }
+            } else {
+              try {
+                onLine(line)
+              } catch {}
+            }
           }
         })
 
@@ -340,18 +359,40 @@ async function sendUpstream({ body, headers, proxyUrl, timeoutMs, idleTimeoutMs,
             } catch {}
           }
           if (!sawCompleted) {
-            // 没有终止事件 = 流被截断，不能当成功返回（客户端会报 stream closed）。
+            // 没有终止事件 = 流被截断。如果内容还没放行，就不提交、允许上层换号重试。
+            if (!flushed) {
+              finish({
+                ok: false,
+                status: 0,
+                headers: responseHeaders,
+                body: {},
+                committed: false,
+                terminalState: 'incomplete',
+                transportError: true,
+                error: 'upstream_closed_before_content',
+              })
+              return
+            }
             finish({
               ok: false,
               status: 200,
               headers: responseHeaders,
               body: {},
-              committed: sawData,
+              committed: true,
               terminalState: 'incomplete',
               transportError: false,
               error: 'missing_response_completed',
             })
             return
+          }
+          if (!flushed) {
+            flushed = true
+            for (const item of pending) {
+              try {
+                onLine(item)
+              } catch {}
+            }
+            pending.length = 0
           }
           finish({
             ok: true,
