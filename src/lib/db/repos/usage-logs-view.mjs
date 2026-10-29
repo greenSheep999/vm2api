@@ -501,29 +501,34 @@ export class UsageLogsView {
       list.push(a)
       chains.set(a.request_id, list)
     }
-    // 账号档位（降智/满血）是账号级结论：取每个槽位最近一次探针结果。
+    // 档位必须按「槽位 + 模型」取：同一个号可能 astra 降智、sol 正常，
+    // 按槽位取会把整行都染成降智。
     const probe = new Map()
-    const vmIds = uniq(rows.map((r) => r.vm_id).filter(Boolean))
-    if (vmIds.length) {
+    const pairs = uniq(
+      rows
+        .filter((r) => r.vm_id && (r.model || r.requested_model))
+        .map((r) => `${r.vm_id}\u0000${r.model || r.requested_model}`),
+    )
+    if (pairs.length) {
       try {
         const found = this.db
           .prepare(
-            `SELECT vm_id, verdict, started_at FROM (
-               SELECT vm_id, verdict, started_at,
-                      ROW_NUMBER() OVER (PARTITION BY vm_id ORDER BY started_at DESC) AS rn
+            `SELECT vm_id, model, verdict, started_at, question_id FROM (
+               SELECT vm_id, model, verdict, started_at, question_id,
+                      ROW_NUMBER() OVER (PARTITION BY vm_id, model ORDER BY started_at DESC) AS rn
                  FROM iq_task_runs
-                WHERE vm_id IN (${placeholders(vmIds)}) AND question_id = 'probe'
+                WHERE question_id = 'probe'
              ) WHERE rn = 1`,
           )
-          .all(...vmIds)
-        for (const item of found) probe.set(item.vm_id, item)
+          .all()
+        for (const item of found) probe.set(`${item.vm_id}\u0000${item.model}`, item)
       } catch {}
     }
     return rows.map((row) => {
       const own = (row.request_id && chains.get(row.request_id)) || []
       const chain = own.filter((a) => attemptWithinRow(a, row)).map((a) => toProviderChainItem(a, names))
       const mapped = toUsageLogRow(row, names, chain)
-      const hit = probe.get(row.vm_id)
+      const hit = probe.get(`${row.vm_id}\u0000${row.model || row.requested_model}`)
       mapped.probeVerdict = hit?.verdict || null
       mapped.probeAt = hit?.started_at || null
       return mapped

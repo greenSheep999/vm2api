@@ -175,8 +175,10 @@ export function ModelDisplayWithRedirect({
                     : row.probeVerdict === 'degraded'
                       ? '降智'
                       : row.probeVerdict === 'route_changed'
-                        ? '路由漂移'
-                        : '无票'}
+                        ? '疑似降智'
+                        : row.probeVerdict === 'no_ticket'
+                          ? '无票'
+                          : '未探针'}
                 </Badge>
               </TooltipTrigger>
               <TooltipContent className='max-w-xs space-y-1 text-xs'>
