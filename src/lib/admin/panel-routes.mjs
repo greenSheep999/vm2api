@@ -2847,7 +2847,7 @@ export function createPanelHandler(ctx) {
         for (const id of ids) {
           try {
             let record = null
-            if (hasWeight || hasLevel || hasTransport) {
+            if (hasWeight || hasLevel || hasTransport || hasCodexSettings) {
               record = patchVmRecord(cfg.paths.project, id, (current) => {
                 const patch = {}
                 if (hasWeight || hasLevel) {
@@ -2858,6 +2858,20 @@ export function createPanelHandler(ctx) {
                     else policy.priority = nextLevel
                   }
                   patch.policy = policy
+                }
+                if (hasCodexSettings) {
+                  const incoming = body?.codex_settings || {}
+                  const settings = { ...(current.codex?.settings || {}) }
+                  if (['off', 'device', 'session', 'full'].includes(incoming.fingerprint_mode)) {
+                    settings.fingerprint_mode = incoming.fingerprint_mode
+                  }
+                  if (typeof incoming.allow_official_only === 'boolean') {
+                    settings.allow_official_only = incoming.allow_official_only
+                  }
+                  if (['auto', 'on', 'off'].includes(incoming.compact_mode)) {
+                    settings.compact_mode = incoming.compact_mode
+                  }
+                  patch.codex = { ...(current.codex || {}), settings }
                 }
                 if (hasTransport) {
                   const transport = { ...(current.transport || {}) }
@@ -3025,6 +3039,8 @@ export function createPanelHandler(ctx) {
         const hasWeight = body && Object.prototype.hasOwnProperty.call(body, 'weight')
         // 上游传输方式：ws 走出站 WebSocket（缓存命中更好），http 走原来的直连 SSE。
         const hasTransport = body && Object.prototype.hasOwnProperty.call(body, 'transport')
+        // 槽位级 Codex 设置（覆盖全局 policy）：指纹收敛 / 仅官方客户端 / Compact。
+        const hasCodexSettings = body && Object.prototype.hasOwnProperty.call(body, 'codex_settings')
         const hasMemory =
           body &&
           (Object.prototype.hasOwnProperty.call(body, 'memory') ||

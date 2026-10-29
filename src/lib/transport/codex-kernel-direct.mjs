@@ -167,6 +167,7 @@ function buildHeaders(args, token) {
   // 指纹收敛：多人共用同一 OAuth 账号时，把设备/会话标识收敛成账号级恒定值，
   // 减少上游能看到的设备数与会话数。默认 off（原样透传）。
   const fpMode =
+    args?.exec?.vm?.codex?.settings?.fingerprint_mode ||
     args?.exec?.vm?.codex?.fingerprint_mode ||
     args?.exec?.vm?.fingerprint_mode ||
     'off'

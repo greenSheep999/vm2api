@@ -733,7 +733,17 @@ export async function handleCodexProtocol({
   // 上游才会铸 x-codex-turn-state。
   // 仅允许 Codex 官方客户端：槽位打开后，非 codex 的 originator/UA 直接拒，
   // 避免第三方 SDK 把「非官方流量」带到这个账号上。
-  if (routing?.codex?.ticket?.allow_official_only === true) {
+  const slotCodexSettings = (() => {
+    try {
+      const one = getVm(projectRoot, pinnedVmId(req) || '') || null
+      return one?.codex?.settings || null
+    } catch {
+      return null
+    }
+  })()
+  const allowOfficialOnly =
+    slotCodexSettings?.allow_official_only ?? routing?.codex?.ticket?.allow_official_only === true
+  if (allowOfficialOnly === true) {
     const look = (name) => String(req?.headers?.[name] || '').toLowerCase()
     const originator = look('originator')
     const ua = look('user-agent')
@@ -775,7 +785,8 @@ export async function handleCodexProtocol({
   // Compact 端点：/v1/responses/compact 转发到上游同名端点。
   // compact_mode='off' 时直接拒，避免把它当普通补全打出去。
   const isCompact = /\/responses\/compact/.test(String(req?.url || ''))
-  if (isCompact && routing?.codex?.ticket?.compact_mode === 'off') {
+  const compactMode = slotCodexSettings?.compact_mode || routing?.codex?.ticket?.compact_mode || 'auto'
+  if (isCompact && compactMode === 'off') {
     return json(res, 400, {
       error: {
         type: 'invalid_request_error',

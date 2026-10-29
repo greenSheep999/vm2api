@@ -68,7 +68,13 @@ export function useVmPerms(): VmPerms {
 }
 
 export type VmDetailTab =
-  'overview' | 'account' | 'proxy' | 'test' | 'ops' | 'seed'
+  | 'overview'
+  | 'account'
+  | 'proxy'
+  | 'test'
+  | 'ops'
+  | 'codex'
+  | 'seed'
 
 /**
  * 页签可见性。kind 用来做 provider 判定：
@@ -80,7 +86,9 @@ export function vmDetailTabs(perms: VmPerms, kind?: string | null): VmDetailTab[
   if (perms.test) tabs.push('test')
   if (perms.admin) {
     tabs.push('ops')
-    if (kind !== 'codex') tabs.push('seed')
+    // Codex 槽位有独立设置页（WS / 指纹 / Compact / 官方客户端），Claude 没有。
+    if (kind === 'codex') tabs.push('codex')
+    else tabs.push('seed')
   }
   return tabs
 }

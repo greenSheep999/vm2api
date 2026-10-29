@@ -64,6 +64,7 @@ import {
 import { ActiveVmBadge } from '@/features/vm/active-vm-badge'
 import { DeleteActiveVmHint } from '@/features/vm/delete-active-hint'
 import { VmAccountTab } from '@/features/vm/detail-account-tab'
+import { CodexSettingsTab } from '@/features/vm/codex-settings-tab'
 import { VmOpsTab } from '@/features/vm/detail-ops-tab'
 import { VmOverviewTab } from '@/features/vm/detail-overview-tab'
 import { VmProxyTab } from '@/features/vm/detail-proxy-tab'
@@ -520,6 +521,9 @@ function VmDetailBody({
             {tabs.includes('test') ? (
               <TabsTrigger value='test'>测试</TabsTrigger>
             ) : null}
+            {tabs.includes('codex') ? (
+              <TabsTrigger value='codex'>Codex</TabsTrigger>
+            ) : null}
             {tabs.includes('ops') ? (
               <TabsTrigger value='ops'>运维</TabsTrigger>
             ) : null}
@@ -667,6 +671,10 @@ function VmDetailBody({
                 }}
                 onDelete={() => setConfirmDel(true)}
               />
+              <TabsContent value='codex' className='pt-4'>
+                <CodexSettingsTab vm={vm} />
+              </TabsContent>
+
               <TabsContent value='seed' className='pt-4'>
                 {seed.data ? (
                   <SeedPolicyCard
