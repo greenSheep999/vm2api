@@ -211,6 +211,7 @@ function VmDetailBody({
     select: (m) => (m.state.variables as VmJob | undefined)?.key ?? '',
   })
   const busy = (key: string) => pendingKeys.includes(key)
+  const [harvesting, setHarvesting] = useState(false)
   const runJob = (j: VmJob) => {
     if (!busy(j.key)) job.mutate(j)
   }
@@ -464,6 +465,50 @@ function VmDetailBody({
               >
                 探测
               </Button>
+              {/* 打票与测智商只对 Codex 槽位有意义，放在最右侧与「探测」分开。 */}
+              {isCodexVm(vm) ? (
+                <>
+                  <Button
+                    size='sm'
+                    variant='outline'
+                    loading={harvesting}
+                    onClick={async () => {
+                      setHarvesting(true)
+                      try {
+                        const model =
+                          (vm as unknown as { policy?: { models?: string[] } })?.policy?.models?.[0] || 'gpt-6-astra'
+                        const result = await api<{
+                          ok?: boolean
+                          verdict?: string
+                          blocks?: number | null
+                          http_status?: number
+                        }>('/api/panel/ops/harvest/run', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ vm_id: vm.id, model }),
+                        })
+                        if (result?.ok) toast.success(`打票成功（${result.blocks ?? '?'} 块）`)
+                        else toast.warning(`打票未成功：${result?.verdict || '未知'}（HTTP ${result?.http_status ?? '?'}）`)
+                      } catch (e) {
+                        toast.error(`打票失败：${(e as Error).message}`)
+                      } finally {
+                        setHarvesting(false)
+                      }
+                    }}
+                  >
+                    打票
+                  </Button>
+                  <Button
+                    size='sm'
+                    variant='outline'
+                    onClick={() => {
+                      window.location.hash = `#/ops/iq?vm=${encodeURIComponent(vm.id)}`
+                    }}
+                  >
+                    测智商
+                  </Button>
+                </>
+              ) : null}
             </div>
           ) : null}
         </div>
