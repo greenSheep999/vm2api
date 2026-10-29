@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/tooltip'
 import { StatusMark } from '@/components/status-mark'
 import { AllowedModelsCard } from '@/features/vm/allowed-models-card'
+import { UpstreamTransportCard } from '@/features/vm/upstream-transport-card'
 import { AuthSchemeEditor } from '@/features/vm/auth-scheme-editor'
 import { CodexCredentialPanel } from '@/features/vm/codex-credential-panel'
 import { ConvertOauthToSetupButton } from '@/features/vm/convert-oauth-button'
@@ -340,6 +341,8 @@ export function VmAccountTab(props: VmAccountTabProps) {
           {credTypeLabel(credType)}。
         </p>
       ) : null}
+
+      {isCodexVm(vm) ? <UpstreamTransportCard vm={vm} /> : null}
 
       <AllowedModelsCard vm={vm} />
     </TabsContent>

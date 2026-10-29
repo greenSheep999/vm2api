@@ -2842,15 +2842,26 @@ export function createPanelHandler(ctx) {
         for (const id of ids) {
           try {
             let record = null
-            if (hasWeight || hasLevel) {
+            if (hasWeight || hasLevel || hasTransport) {
               record = patchVmRecord(cfg.paths.project, id, (current) => {
-                const policy = { ...(current.policy || {}) }
-                if (hasWeight) policy.weight = nextWeight
-                if (hasLevel) {
-                  if (nextLevel == null) delete policy.priority
-                  else policy.priority = nextLevel
+                const patch = {}
+                if (hasWeight || hasLevel) {
+                  const policy = { ...(current.policy || {}) }
+                  if (hasWeight) policy.weight = nextWeight
+                  if (hasLevel) {
+                    if (nextLevel == null) delete policy.priority
+                    else policy.priority = nextLevel
+                  }
+                  patch.policy = policy
                 }
-                return { policy }
+                if (hasTransport) {
+                  const upstream = String(body?.transport?.upstream || '').trim()
+                  const transport = { ...(current.transport || {}) }
+                  if (upstream === 'ws' || upstream === 'http') transport.upstream = upstream
+                  else delete transport.upstream
+                  patch.transport = Object.keys(transport).length ? transport : null
+                }
+                return patch
               })
             } else {
               record = getVm(cfg.paths.project, id)
@@ -2999,6 +3010,8 @@ export function createPanelHandler(ctx) {
         const hasActiveHours = body && Object.prototype.hasOwnProperty.call(body, 'active_hours')
         const hasTimezone = body && Object.prototype.hasOwnProperty.call(body, 'timezone')
         const hasWeight = body && Object.prototype.hasOwnProperty.call(body, 'weight')
+        // 上游传输方式：ws 走出站 WebSocket（缓存命中更好），http 走原来的直连 SSE。
+        const hasTransport = body && Object.prototype.hasOwnProperty.call(body, 'transport')
         const hasMemory =
           body &&
           (Object.prototype.hasOwnProperty.call(body, 'memory') ||
