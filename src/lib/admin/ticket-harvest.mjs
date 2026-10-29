@@ -178,6 +178,9 @@ export function harvestOverview(projectRoot) {
           checked_at: snap.checked_at,
           http_status: snap.http_status,
           edge_ip: snap.edge_ip || null,
+          probe_verdict: snap.probe_verdict || null,
+          probe_at: snap.probe_at || null,
+          probe_detail: snap.probe_detail || null,
         })
       }
       if (models.length === 0) {
@@ -306,6 +309,24 @@ export async function runTicketProbe({ projectRoot, vmId, model, edgeIp = null, 
   else if (shot2.state !== shot1.state) verdict = 'degraded'
   else verdict = 'healthy_same'
 
+  try {
+    db()
+      .prepare(
+        `INSERT INTO ticket_snapshots (vm_id, model, probe_verdict, probe_at, probe_detail)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(vm_id, model) DO UPDATE SET
+           probe_verdict = excluded.probe_verdict,
+           probe_at = excluded.probe_at,
+           probe_detail = excluded.probe_detail`,
+      )
+      .run(
+        vmId,
+        useModel,
+        verdict,
+        nowIso(),
+        `shot1=${shot1.status}/${shot1.state.length} shot2=${shot2?.status ?? '-'}/${shot2?.state.length ?? '-'}`,
+      )
+  } catch {}
   recordEvent({
     kind: 'probe',
     vm_id: vmId,

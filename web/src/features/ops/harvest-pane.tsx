@@ -18,6 +18,10 @@ export type HarvestTicket = {
   proxy?: string | null
   checked_at?: string | null
   http_status?: number | null
+  edge_ip?: string | null
+  probe_verdict?: string | null
+  probe_at?: string | null
+  probe_detail?: string | null
 }
 
 export type HarvestAccount = {
@@ -56,23 +60,6 @@ const CARD = 'rounded-lg border bg-card p-4'
 function fmtClock(v?: string | null) {
   if (!v) return '—'
   return v.replace('T', ' ').replace('Z', '').slice(11, 19)
-}
-
-function verdictLabel(v?: string | null) {
-  switch (v) {
-    case 'ok':
-      return '有票'
-    case 'short':
-      return '块数不足'
-    case 'tall':
-      return '块数超出'
-    case 'malformed':
-      return '票不合法'
-    case 'absent':
-      return '无票'
-    default:
-      return '未采过'
-  }
 }
 
 function chipClass(t: HarvestTicket) {
@@ -351,11 +338,34 @@ export function HarvestPane() {
                       className={cn('rounded-md px-2.5 py-2 text-xs', chipClass(t))}
                     >
                       <div className='flex flex-wrap items-center justify-between gap-2'>
-                        <span className='flex items-center gap-2 font-mono font-medium'>
+                        <span className='flex flex-wrap items-center gap-2 font-mono font-medium'>
                           {t.model}
                           <span className='rounded bg-black/5 px-1 text-[10px] dark:bg-white/10'>
-                            {verdictLabel(t.verdict)}
+                            {t.verdict === 'ok' ? '有票' : t.verdict === 'absent' ? '无票' : '票异常'}
                           </span>
+                          {t.probe_verdict ? (
+                            <span
+                              className={cn(
+                                'rounded px-1 text-[10px]',
+                                t.probe_verdict === 'healthy' || t.probe_verdict === 'healthy_same'
+                                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                                  : t.probe_verdict === 'degraded'
+                                    ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
+                                    : 'bg-amber-500/15 text-amber-700 dark:text-amber-300',
+                              )}
+                              title={t.probe_detail || undefined}
+                            >
+                              {t.probe_verdict === 'healthy' || t.probe_verdict === 'healthy_same'
+                                ? '探针：满血'
+                                : t.probe_verdict === 'degraded'
+                                  ? '探针：降智'
+                                  : '探针：无票'}
+                            </span>
+                          ) : (
+                            <span className='rounded bg-muted px-1 text-[10px] text-muted-foreground'>
+                              未探针
+                            </span>
+                          )}
                         </span>
                         <span className='flex items-center gap-1'>
                         <Button
