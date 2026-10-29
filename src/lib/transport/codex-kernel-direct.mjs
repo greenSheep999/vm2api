@@ -19,10 +19,16 @@ import { pickTicket } from '../admin/ticket-borrow.mjs'
 
 const UPSTREAM_HOST = 'chatgpt.com'
 const UPSTREAM_PATH = '/backend-api/codex/responses'
-const DEFAULT_UA = 'codex_cli_rs/0.160.0 (linux x86_64)'
+// 上游看到的是「槽位（Debian 12 / Linux 6.x）发起连接」，所以身份必须是 Linux CLI。
+// 把客户端的 Desktop(Mac) 原样透传，等于告诉上游「Mac 桌面端从机房 IP 发请求」，
+// 指纹自相矛盾；实测透传 Desktop 也不可行。
+const LINUX_OS = 'Linux 6.12.111+deb13-amd64'
+const CLI_VERSION = '0.165.0'
+const CLI_ORIGINATOR = 'codex_exec'
+const DEFAULT_UA = `${CLI_ORIGINATOR}/${CLI_VERSION} (${LINUX_OS}; x86_64)`
 const IDENTITY = {
-  originator: 'codex_cli_rs',
-  version: '0.160.0',
+  originator: CLI_ORIGINATOR,
+  version: CLI_VERSION,
   'openai-beta': 'responses=experimental',
 }
 
@@ -152,6 +158,9 @@ function buildHeaders(args, token) {
   }
   const sessionId = args?.envelope?.session?.session_id
   if (typeof sessionId === 'string' && sessionId) headers['session-id'] = sessionId
+  // 身份三件套一律归一到 Linux CLI 档案（客户端值只在没有默认档案时兜底）。
+  headers.originator = CLI_ORIGINATOR
+  headers.version = CLI_VERSION
   for (const [name, value] of Object.entries(IDENTITY)) {
     if (!headers[name]) headers[name] = value
   }
@@ -162,13 +171,7 @@ function buildHeaders(args, token) {
   }
   // UA 与 version 必须来自客户端本体：originator 说是 Desktop/Mac，UA 却写
   // codex_cli_rs/linux 会被上游当成伪造客户端。缺 UA 时才用默认值。
-  const clientHeaders = args?.reqHeaders || {}
-  const ua =
-    String(clientHeaders['user-agent'] || '').trim() ||
-    String(args?.envelope?.options?.user_agent || '').trim() ||
-    DEFAULT_UA
-  const versionFromUa = /(\d+\.\d+\.\d+[0-9A-Za-z.\-]*)/.exec(ua)?.[1] || ''
-  if (!headers.version) headers.version = versionFromUa || IDENTITY.version
+  const ua = String(args?.envelope?.options?.user_agent || '').trim() || DEFAULT_UA
   // 我们改写 session-id 时，window-id 与 turn-metadata 里的会话字段必须一起换，
   // 否则上游会看到「session-id 是 A，thread/window/metadata 还是 B」的两套会话。
   const sid = headers['session-id']
@@ -187,6 +190,10 @@ function buildHeaders(args, token) {
       if (meta.session_id) meta.session_id = sid
       if (meta.thread_id) meta.thread_id = sid
       if (meta.window_id) meta.window_id = `${sid}${suffix}`
+      // 槽位是 Linux，元数据里的平台信息不能残留 mac/desktop 字样。
+      for (const key of ['os', 'platform', 'terminal', 'client', 'app']) {
+        if (typeof meta[key] === 'string' && /mac|darwin|desktop|windows/i.test(meta[key])) delete meta[key]
+      }
       headers['x-codex-turn-metadata'] = JSON.stringify(meta)
     } catch {}
   }
