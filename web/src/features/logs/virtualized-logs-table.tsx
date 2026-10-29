@@ -686,6 +686,12 @@ function LogRow({
         </div>
       )}
       <div className={cn(COL.status, 'truncate')}>
+        {/* 流式 / 非流式必须一眼可辨：SSE 和整包响应的排查路径完全不同。 */}
+        {row.stream ? (
+          <span className='mr-1 rounded bg-sky-500/15 px-1 py-0.5 text-[9px] font-medium text-sky-700 dark:text-sky-300'>
+            SSE
+          </span>
+        ) : null}
         <Button
           type='button'
           variant='ghost'
@@ -735,19 +741,22 @@ function fullPriceUsd(row: UsageLogRow): number | null {
  * 顺序也要和渲染顺序一致。
  */
 const COL = {
-  time: 'min-w-[56px] flex-[0.6] pr-1.5 pl-3',
-  user: 'min-w-[48px] flex-[0.5] px-2',
-  key: 'min-w-[76px] flex-[0.9] px-2',
-  session: 'min-w-[124px] flex-[1.2] px-2',
-  ip: 'min-w-[112px] flex-[1] px-2',
-  slot: 'min-w-[160px] flex-[1.8] px-1.5',
-  model: 'min-w-[130px] flex-[1.4] px-1.5',
-  endpoint: 'min-w-[112px] flex-[1.0] px-1.5',
-  tokens: 'min-w-[96px] flex-[0.9] px-1.5 text-right',
-  cache: 'min-w-[86px] flex-[0.8] px-1.5 text-right',
-  cost: 'min-w-[96px] flex-[0.9] px-1.5 text-right',
-  performance: 'min-w-[104px] flex-[1] px-1.5 text-right',
-  status: 'min-w-[70px] flex-[0.7] pr-3 pl-1.5 text-right',
+  // order-* 是唯一决定视觉顺序的地方：表头和表体都引用 COL，
+  // 所以顺序、宽度永远不会两边不一致。
+  // 阅读顺序：时间 → 用户 → 槽位 → 模型 → 端点 → 密钥 → tokens → 缓存 → 成本 → 性能 → 状态 → session → ip
+  time: 'order-[1] min-w-[56px] flex-[0.6] pr-1.5 pl-3',
+  user: 'order-[2] min-w-[48px] flex-[0.5] px-2',
+  slot: 'order-[3] min-w-[160px] flex-[1.8] px-1.5',
+  model: 'order-[4] min-w-[130px] flex-[1.4] px-1.5',
+  endpoint: 'order-[5] min-w-[112px] flex-[1.0] px-1.5',
+  key: 'order-[6] min-w-[76px] flex-[0.9] px-2',
+  tokens: 'order-[7] min-w-[96px] flex-[0.9] px-1.5 text-right',
+  cache: 'order-[8] min-w-[86px] flex-[0.8] px-1.5 text-right',
+  cost: 'order-[9] min-w-[96px] flex-[0.9] px-1.5 text-right',
+  performance: 'order-[10] min-w-[104px] flex-[1] px-1.5 text-right',
+  status: 'order-[11] min-w-[70px] flex-[0.7] pr-3 pl-1.5 text-right',
+  session: 'order-[12] min-w-[124px] flex-[1.2] px-2',
+  ip: 'order-[13] min-w-[112px] flex-[1] px-2',
 } as const
 
 export function VirtualizedLogsTable({
