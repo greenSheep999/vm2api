@@ -263,6 +263,7 @@ export function orderCodexSessionSlots(
     excluded = null,
     probeRouting = false,
     ticketGate = null,
+    rpmStrategy = 'tiered',
   } = {},
 ) {
   const list = Array.isArray(vms) ? vms : []
@@ -336,6 +337,7 @@ export function orderCodexSessionSlots(
     now,
     requestIntervalMs,
     preferredAccountId: home && ids.includes(home) ? home : null,
+    rpmExemptId: rpmStrategy === 'sticky_exempt' ? boundVmId || null : null,
     preferredOverridesWeight: true,
     roundRobinCursor: cursor,
   })

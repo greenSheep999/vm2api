@@ -295,6 +295,7 @@ export function pickCodexCandidates(
     quotaPolicy: routingPolicy,
     probeRouting: routing?.codex?.ticket?.probe_routing === true,
     ticketGate,
+    rpmStrategy: routing?.codex?.ticket?.rpm_strategy === 'sticky_exempt' ? 'sticky_exempt' : 'tiered',
   })
   // A resting home migrates the conversation like a gone one: the next slot rebinds it.
   const boundLeft = ordered.boundState === 'gone' || ordered.boundState === 'resting'
@@ -769,6 +770,18 @@ export async function handleCodexProtocol({
     protocol === 'openai.chat' || protocol === 'openai.completions'
       ? { id: 'codex', seq: 0, tools: new Map(), sawTool: false }
       : null
+  // Compact 端点：/v1/responses/compact 转发到上游同名端点。
+  // compact_mode='off' 时直接拒，避免把它当普通补全打出去。
+  const isCompact = /\/responses\/compact/.test(String(req?.url || ''))
+  if (isCompact && routing?.codex?.ticket?.compact_mode === 'off') {
+    return json(res, 400, {
+      error: {
+        type: 'invalid_request_error',
+        code: 'compact_disabled',
+        message: '该网关已关闭 Compact 端点',
+      },
+    })
+  }
   const ticketGateEnabled = routing?.codex?.ticket?.gate_scheduling === true
   let ticketVerdicts = null
   if (ticketGateEnabled) {
@@ -978,6 +991,7 @@ export async function handleCodexProtocol({
               idleTimeoutMs: resolveStreamIdleTimeoutMs(routing, cfg),
               routing,
               body: outboundBody,
+              compact: isCompact,
               reqHeaders: req.headers,
               envelope: {
                 body: outboundBody,

@@ -69,7 +69,9 @@ export function schedulingBlocker(candidate, context = {}) {
   const cap = effectiveConcurrency(candidate, context.maxConcurrent)
   if (Number(candidate.inFlight || 0) >= cap) return 'concurrency_limit'
   const maxRpm = Number(candidate.maxRpm) || 0
-  if (maxRpm > 0 && Number(candidate.rpmCount || 0) >= maxRpm) return 'rpm_limit'
+  // 粘性豁免：同一会话已经绑定的槽位不再被 RPM 卡掉，避免对话中途被换号。
+  const rpmExempt = context.rpmExemptId != null && String(context.rpmExemptId) === String(candidate.id)
+  if (!rpmExempt && maxRpm > 0 && Number(candidate.rpmCount || 0) >= maxRpm) return 'rpm_limit'
   const interval = Number(context.requestIntervalMs) || 0
   const started = Number(candidate.lastStartedAt)
   if (interval > 0 && Number.isFinite(started)) {
