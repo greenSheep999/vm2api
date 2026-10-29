@@ -2063,6 +2063,33 @@ export function createPanelHandler(ctx) {
         }
       }
 
+      // POST /api/panel/ops/harvest/borrow — 借票（来源票当引子 → 目标铸票 → 续接验证）
+      if (req.method === 'POST' && p === '/api/panel/ops/harvest/borrow') {
+        const body = await readBody(req, 8192).catch(() => ({}))
+        const vmId = String(body?.vm_id || '').trim()
+        if (!vmId) return json(res, 400, { ok: false, error: { message: 'vm_id required' } })
+        try {
+          const { runTicketBorrow } = await import('./ticket-harvest.mjs')
+          const policy = ctx.routingConfig?.codex?.ticket || {}
+          const result = await runTicketBorrow({
+            projectRoot: cfg.paths.project,
+            vmId,
+            model: body?.model,
+            donorVmId: body?.donor_vm_id,
+            edgeIp: policy.edge_direct ? (policy.edge_ips || [])[0] || null : null,
+          })
+          return json(res, 200, { ok: true, data: result })
+        } catch (e) {
+          return json(res, 500, { ok: false, error: { message: String(e?.message || e) } })
+        }
+      }
+
+      // GET /api/panel/ops/pool — 统一门票库
+      if (req.method === 'GET' && p === '/api/panel/ops/pool') {
+        const { listPool } = await import('./ticket-borrow.mjs')
+        return json(res, 200, { ok: true, data: { items: listPool() } })
+      }
+
       // POST /api/panel/ops/harvest/probe — 两发门票探针（裸打 + 续接）
       if (req.method === 'POST' && p === '/api/panel/ops/harvest/probe') {
         const body = await readBody(req, 8192).catch(() => ({}))

@@ -44,6 +44,8 @@ export const DEFAULT_CODEX_TICKET = Object.freeze({
   probe_interval_seconds: 0,
   /** 探针判定 degraded 时自动降权（默认关闭，先观察）。 */
   auto_park: false,
+  /** 业务请求注入票库中「已验证」的门票（默认关闭）。 */
+  inject: false,
 })
 
 export function normalizeCodexTicketPolicy(raw = {}) {
@@ -97,6 +99,7 @@ export function normalizeCodexTicketPolicy(raw = {}) {
     gate_scheduling: src.gate_scheduling === true,
     probe_interval_seconds: int(src.probe_interval_seconds, 0, 0, 86_400),
     auto_park: src.auto_park === true,
+    inject: src.inject === true,
     edge_ips: Array.isArray(src.edge_ips)
       ? src.edge_ips
           .map((ip) => String(ip || '').trim())

@@ -15,6 +15,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createSocksProxyAgent } from '../vm/proxy-agent.mjs'
 import { refreshCodexAccessToken } from '../protocol/codex-models.mjs'
+import { pickTicket } from '../admin/ticket-borrow.mjs'
 
 const UPSTREAM_HOST = 'chatgpt.com'
 const UPSTREAM_PATH = '/backend-api/codex/responses'
@@ -124,6 +125,22 @@ function proxyUrlOf(exec) {
   return String(vm?.proxy?.url || vm?.proxy_url || '').trim()
 }
 
+/**
+ * 业务请求注入门票：只有票库里「已验证」的票才会被注入，
+ * 未验证/过期的票一律不注入（宁可不带，也不带坏票）。
+ */
+function ticketFor(args) {
+  const vmId = args?.exec?.vmId || args?.exec?.vm?.id
+  const model = args?.body?.model
+  if (!vmId || !model) return null
+  if (args?.routing?.codex?.ticket?.inject !== true) return null
+  try {
+    return pickTicket({ vmId, model })
+  } catch {
+    return null
+  }
+}
+
 function buildHeaders(args, token) {
   const envelopeHeaders = args?.envelope?.headers || {}
   const headers = {}
@@ -135,6 +152,11 @@ function buildHeaders(args, token) {
   if (typeof sessionId === 'string' && sessionId) headers['session-id'] = sessionId
   for (const [name, value] of Object.entries(IDENTITY)) {
     if (!headers[name]) headers[name] = value
+  }
+  const ticket = ticketFor(args)
+  if (ticket?.state && !headers['x-codex-turn-state']) {
+    headers['x-codex-turn-state'] = ticket.state
+    if (ticket.cookies?.length) headers.Cookie = ticket.cookies.join('; ')
   }
   const ua = String(args?.envelope?.options?.user_agent || '').trim() || DEFAULT_UA
   return {
@@ -297,6 +319,7 @@ export async function streamCodexKernelDirect(args = {}) {
   return {
     ...result,
     via: 'codex-direct',
+    injected_ticket: Boolean(args?.routing?.codex?.ticket?.inject === true && ticketFor(args)?.state),
     // 门票就在响应头里，原样带出给上层采集与判定。
     headers: result.headers || {},
   }

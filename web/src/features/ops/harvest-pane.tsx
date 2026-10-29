@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Activity, AlertTriangle, Loader2, Play, TicketCheck } from 'lucide-react'
+import { Activity, AlertTriangle, Handshake, Loader2, Play, TicketCheck } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { api } from '@/lib/api'
@@ -82,6 +82,8 @@ export function HarvestPane() {
   const qc = useQueryClient()
   const [running, setRunning] = useState<string | null>(null)
   const [probing, setProbing] = useState<string | null>(null)
+  const [borrowing, setBorrowing] = useState<string | null>(null)
+  const [borrowResults, setBorrowResults] = useState<Record<string, string>>({})
   const [probeResults, setProbeResults] = useState<Record<string, { verdict: string; shoot: any }>>({})
   const [filter, setFilter] = useState<'all' | 'ticket' | 'probe' | 'select' | 'candy'>('all')
 
@@ -121,6 +123,32 @@ export function HarvestPane() {
       toast.error(`打票失败：${(e as Error).message}`)
     } finally {
       setRunning(null)
+    }
+  }
+
+  async function borrow(vmId: string, model: string) {
+    const key = `${vmId}\u0000${model}`
+    setBorrowing(key)
+    try {
+      const r = await api<{ ok: boolean; reason: string; donor?: string; ticket_len?: number }>(
+        '/api/panel/ops/harvest/borrow',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ vm_id: vmId, model }),
+        },
+      )
+      const text = r.ok
+        ? `借票成功 · 来源 ${r.donor} · 票 ${r.ticket_len} 字符（已验证入库）`
+        : `借票失败 · ${r.reason}${r.donor ? ` · 来源 ${r.donor}` : ''}`
+      setBorrowResults((cur) => ({ ...cur, [key]: text }))
+      if (r.ok) toast.success(text)
+      else toast.warning(text)
+      void qc.invalidateQueries({ queryKey: ['ops-harvest'] })
+    } catch (e) {
+      toast.error(`借票出错：${(e as Error).message}`)
+    } finally {
+      setBorrowing(null)
     }
   }
 
@@ -385,6 +413,21 @@ export function HarvestPane() {
                         </Button>
                         <Button
                           size='sm'
+                          variant='outline'
+                          className='h-6 px-1.5 text-[11px]'
+                          disabled={borrowing === key}
+                          onClick={() => void borrow(a.id, t.model)}
+                          title='借票：拿已验证的来源票当引子，让本账号铸一张自己的票并续接验证'
+                        >
+                          {borrowing === key ? (
+                            <Loader2 className='mr-1 h-3 w-3 animate-spin' />
+                          ) : (
+                            <Handshake className='mr-1 h-3 w-3' />
+                          )}
+                          借票
+                        </Button>
+                        <Button
+                          size='sm'
                           variant='ghost'
                           className='h-6 px-1.5 text-[11px]'
                           disabled={running === key || a.skip_harvest}
@@ -399,6 +442,11 @@ export function HarvestPane() {
                         </Button>
                         </span>
                       </div>
+                      {borrowResults[key] ? (
+                        <div className='mt-1 rounded bg-black/5 px-2 py-1 font-mono text-[10px] dark:bg-white/10'>
+                          {borrowResults[key]}
+                        </div>
+                      ) : null}
                       {probeResults[key] ? (
                         <div className='mt-1 rounded bg-black/5 px-2 py-1 font-mono text-[10px] dark:bg-white/10'>
                           探针 {probeResults[key].verdict} · 第一发 HTTP{' '}

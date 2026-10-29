@@ -15,6 +15,7 @@ import { getDb } from '../db/database.mjs'
 import { getVm, listVms } from '../vm/vm-registry.mjs'
 import { readCodexAccounts } from '../vm/codex-slot.mjs'
 import { isCodexVm } from '../vm/vm-kind.mjs'
+import { dropTicket, pickTicket, storeTicket } from './ticket-borrow.mjs'
 import { createSocksProxyAgent } from '../vm/proxy-agent.mjs'
 import { judgeTurnState, expectedTurnStateBlocks } from '../protocol/turn-state.mjs'
 
@@ -464,6 +465,105 @@ export async function runTicketProbe({ projectRoot, vmId, model, edgeIp = null, 
     route: { shot1: shot1.route || [], shot2: shot2?.route || [] },
     edge_ip: edgeIp,
   }
+}
+
+/**
+ * 借票（三发）：
+ *   1. 来源账号铸种子票（state + 路由 cookie）
+ *   2. 目标账号用自己的 token、走来源的出口、带上种子票 → 上游给目标铸一张新票
+ *   3. 目标账号用这张新票续接 → 不重铸才算验证通过
+ *
+ * 通过才入库，否则丢弃（不污染业务流量）。
+ */
+export async function runTicketBorrow({ projectRoot, vmId, model, donorVmId, edgeIp = null }) {
+  const vm = getVm(projectRoot, vmId)
+  if (!vm) return { ok: false, reason: 'vm_not_found' }
+  const token = readCodexAccounts(projectRoot, vmId).find((a) => a?.access_token)?.access_token
+  if (!token) return { ok: false, reason: 'no_access_token' }
+  const useModel = String(model || DEFAULT_MODEL).trim() || DEFAULT_MODEL
+
+  // 来源：默认挑一个探针 healthy 的账号
+  const donorId = String(donorVmId || '').trim() || pickHealthyDonor(projectRoot, vmId)
+  if (!donorId) return { ok: false, reason: 'no_healthy_donor' }
+  const donorVm = getVm(projectRoot, donorId)
+  const donorToken = readCodexAccounts(projectRoot, donorId).find((a) => a?.access_token)?.access_token
+  if (!donorToken) return { ok: false, reason: 'donor_no_token' }
+  const donorProxy = donorVm?.proxy?.url || null
+
+  const sessionId = `borrow-${vmId}-${Date.now().toString(36)}`
+  const seed = await mintShot({ edgeIp, proxyUrl: donorProxy, token: donorToken, model: useModel, sessionId })
+  if (!seed.state) return { ok: false, reason: 'donor_mint_failed', http: seed.status }
+
+  // 目标借种：用自己的 token，但出口与种子一致
+  const got = await mintShot({
+    edgeIp,
+    proxyUrl: donorProxy,
+    token,
+    model: useModel,
+    sessionId,
+    state: seed.state,
+    route: seed.cookies || [],
+  })
+  if (!got.state || got.state === seed.state) {
+    return { ok: false, reason: 'target_seed_rejected', http: got.status, donor: donorId }
+  }
+
+  // 验证：目标用新票续接
+  const cont = await mintShot({
+    edgeIp,
+    proxyUrl: donorProxy,
+    token,
+    model: useModel,
+    sessionId,
+    state: got.state,
+    route: got.cookies?.length ? got.cookies : seed.cookies || [],
+  })
+  const reissued = Boolean(cont.state) && cont.state !== got.state
+
+  recordEvent({
+    kind: 'borrow',
+    vm_id: vmId,
+    model: useModel,
+    http_status: cont.status || null,
+    result: reissued ? 'fail' : 'ok',
+    reason: reissued ? 'reissued' : 'verified',
+    detail: `donor=${donorId} seed=${seed.state.length} target=${got.state.length} cont=${cont.state.length}`,
+    proxy: donorProxy,
+    edge_ip: edgeIp,
+  })
+
+  if (reissued) {
+    dropTicket({ vmId, model: useModel })
+    return { ok: false, reason: 'reissued', donor: donorId, detail: '目标借种后仍重铸，借票无效' }
+  }
+
+  const judged = judgeTurnState(got.state, vm?.codex?.plan_type || null)
+  storeTicket({
+    vmId,
+    model: useModel,
+    state: got.state,
+    cookies: got.cookies?.length ? got.cookies : seed.cookies || [],
+    source: donorId,
+    verdict: 'verified',
+    blocks: judged.blocks,
+    len: judged.len,
+    issuedAt: judged.issued_at,
+  })
+  return { ok: true, reason: 'verified', donor: donorId, ticket_len: got.state.length, blocks: judged.blocks }
+}
+
+/** 探针 healthy 且票未过期的账号，作为借票来源。 */
+function pickHealthyDonor(projectRoot, excludeVmId) {
+  const rows = readSnapshots()
+  const healthy = []
+  for (const [key, snap] of rows) {
+    const [vmId] = key.split('\u0000')
+    if (!vmId || vmId === excludeVmId) continue
+    if (snap?.probe_verdict !== 'healthy' && snap?.probe_verdict !== 'healthy_same') continue
+    healthy.push({ vmId, at: Date.parse(snap.probe_at || snap.checked_at || 0) || 0 })
+  }
+  healthy.sort((a, b) => b.at - a.at)
+  return healthy[0]?.vmId || ''
 }
 
 /**
