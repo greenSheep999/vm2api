@@ -234,7 +234,16 @@ function pinnedVmId(req) {
 export function pickCodexCandidates(
   projectRoot,
   req,
-  { stickyRouter = null, sessions = null, body = null, excluded = null, routing = {}, ownerScope = null, overflow = false } = {},
+  {
+    stickyRouter = null,
+    sessions = null,
+    body = null,
+    excluded = null,
+    routing = {},
+    ownerScope = null,
+    overflow = false,
+    ticketGate = null,
+  } = {},
 ) {
   const pin = pinnedVmId(req)
   const owner = ownerScope || ownerScopeFromRequest(req)
@@ -283,6 +292,7 @@ export function pickCodexCandidates(
     excluded,
     quotaPolicy: routingPolicy,
     probeRouting: routing?.codex?.ticket?.probe_routing === true,
+    ticketGate,
   })
   // A resting home migrates the conversation like a gone one: the next slot rebinds it.
   const boundLeft = ordered.boundState === 'gone' || ordered.boundState === 'resting'
@@ -740,6 +750,16 @@ export async function handleCodexProtocol({
     protocol === 'openai.chat' || protocol === 'openai.completions'
       ? { id: 'codex', seq: 0, tools: new Map(), sawTool: false }
       : null
+  const ticketGateEnabled = routing?.codex?.ticket?.gate_scheduling === true
+  let ticketVerdicts = null
+  if (ticketGateEnabled) {
+    try {
+      const { readSnapshots } = await import('../admin/ticket-harvest.mjs')
+      const snaps = readSnapshots()
+      ticketVerdicts = new Map()
+      for (const [key, snap] of snaps) ticketVerdicts.set(key, snap.probe_verdict || snap.verdict || null)
+    } catch {}
+  }
   const pickOpts = {
     stickyRouter,
     sessions,
@@ -747,6 +767,7 @@ export async function handleCodexProtocol({
     excluded: new Set(),
     routing,
     ownerScope,
+    ticketGate: ticketGateEnabled ? { enabled: true, verdicts: ticketVerdicts } : null,
   }
   const deadline = Date.now() + codexWaitTimeoutMs(routing)
   const gone = clientGoneSignal(req, res)

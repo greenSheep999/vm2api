@@ -262,16 +262,37 @@ export function orderCodexSessionSlots(
     model = null,
     excluded = null,
     probeRouting = false,
+    ticketGate = null,
   } = {},
 ) {
   const list = Array.isArray(vms) ? vms : []
   const byId = new Map(list.map((vm) => [vm.id, vm]))
   const policy = normalizeOpenAIQuotaPolicy(quotaPolicy)
-  const found = pickCodexSlots(vms, { pin, now, quotaPolicy: policy, model })
+  // 缺票拦截：只排除「明确不可用」的票（degraded / route_changed）；
+  // 没打过票（未验）不排除，否则会把还没采集的新号全挡掉。
+  let gateFallback = false
+  let gateCandidates = vms
+  if (ticketGate?.enabled && model && (typeof ticketGate.verdicts?.get === 'function' || Array.isArray(ticketGate.verdicts))) {
+    const verdicts = ticketGate.verdicts
+    const usable = vms.filter((vm) => {
+      const key = `${vm.id}\u0000${model}`
+      const verdict = (typeof verdicts.get === 'function' ? verdicts.get(key) : null) ?? null
+      return verdict !== 'degraded' && verdict !== 'route_changed'
+    })
+    if (usable.length) gateCandidates = usable
+    else gateFallback = true
+  }
+  const found = pickCodexSlots(gateCandidates, { pin, now, quotaPolicy: policy, model })
   const boundResting = !!boundVmId && (found.resting || []).includes(boundVmId)
   const picked = found.error ? found : withModelAllowed(found, byId, model)
   if (picked.error) {
-    return { ...picked, sticky: false, boundState: boundResting ? 'resting' : undefined, candidates: [] }
+    return {
+      ...picked,
+      sticky: false,
+      boundState: boundResting ? 'resting' : undefined,
+      candidates: [],
+      ...(gateFallback ? { ticket_gate_fallback: true } : {}),
+    }
   }
   const pool = picked.ids.filter((id) => !excluded?.has(id))
   if (!pool.length)
