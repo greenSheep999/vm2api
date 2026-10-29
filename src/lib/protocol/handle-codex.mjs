@@ -862,7 +862,7 @@ export async function handleCodexProtocol({
         logBag.vm_id = vm.id
         // codex 槽位与账号 1:1（accounts.id == vm.id），不写这一项日志里就没有「供应商」，
         // 前端只能回退显示槽位名，看起来和「槽位」列重复。
-        logBag.account_id = vm.id
+        logBag.account_id = vm?.codex?.email || vm.id
         logBag.attempt_count = hops
         const chunks = []
         const nameSseEvent = createResponsesSseEventNamer()
@@ -1458,7 +1458,7 @@ export async function handleCodexSearch({
         }
         attempts += 1
         logBag.vm_id = vm.id
-        logBag.account_id = vm.id
+        logBag.account_id = vm?.codex?.email || vm.id
         logBag.attempt_count = attempts
         last = await post({
           projectRoot,
@@ -1610,7 +1610,7 @@ export async function handleCodexImages({
         }
         attempts += 1
         logBag.vm_id = vm.id
-        logBag.account_id = vm.id
+        logBag.account_id = vm?.codex?.email || vm.id
         logBag.attempt_count = attempts
         last = await post({
           url: CODEX_IMAGES_URLS[kind] || CODEX_IMAGE_GENERATIONS_URL,

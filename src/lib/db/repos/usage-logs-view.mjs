@@ -176,7 +176,12 @@ export function toUsageLogRow(row, names, chain = []) {
     sessionId: row.outbound_session_id ?? null,
     /** What the caller sent; differs from sessionId whenever the gateway rebuilt it. */
     clientSessionId: row.session_id ?? null,
-    providerName: accountId ? (names.accounts.get(accountId) ?? accountId) : null,
+    providerName: accountId
+      ? names.accounts.get(accountId) ??
+        // 新行直接把邮箱写进 account_id；历史行写的是槽位 id，用邮箱形状判断，
+        // 是邮箱就直接展示，是槽位 id 就落到下面的兜底，避免显示成「账号 = 槽位名」。
+        (/@/.test(accountId) ? accountId : null)
+      : null,
     accountId,
     vmId: row.vm_id ?? null,
     vmName: row.vm_id ? (names.vms.get(row.vm_id) ?? row.vm_id) : null,
