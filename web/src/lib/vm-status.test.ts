@@ -581,7 +581,9 @@ describe('GPT plan label follows OpenAI plan_type', () => {
   it('maps plan_type like codex-proxy-rs', () => {
     expect(openaiPlanLabel('team')).toBe('Business')
     expect(openaiPlanLabel('plus')).toBe('Plus')
-    expect(openaiPlanLabel('prolite')).toBe('Pro')
+    // Pro 分两档：prolite=100 档，pro=200 档（和 ChatGPT 订阅价位对应）
+    expect(openaiPlanLabel('prolite')).toBe('Pro 100')
+    expect(openaiPlanLabel('pro')).toBe('Pro 200')
     expect(openaiPlanLabel(null)).toBe('GPT')
     expect(openaiPlanLabel('future_plan')).toBe('future_plan')
   })

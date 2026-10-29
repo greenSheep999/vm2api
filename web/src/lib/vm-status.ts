@@ -688,8 +688,10 @@ export function openaiPlanLabel(planType: unknown): string {
     case 'plus':
       return 'Plus'
     case 'pro':
+      // ChatGPT Pro 有两个价位：prolite 是 100 档，pro 是 200 档。
+      return 'Pro 200'
     case 'prolite':
-      return 'Pro'
+      return 'Pro 100'
     case 'team':
     case 'self_serve_business_prolite':
     case 'self_serve_business_usage_based':
@@ -718,7 +720,9 @@ export function claudeTier(vm: Vm | undefined): StatusTone {
     if (!vm?.has_token)
       return { key: 'none', label: '—', cls: 'none', text: '—' }
     const plan = openaiPlanLabel(vm?.plan_type || vm?.chatgpt_plan_type)
-    return { key: 'codex', label: plan, cls: 'codex', text: plan }
+    // 用套餐色调上色：Pro/Max 档给彩色，避免全部灰成「未点亮」。
+    const cls = /pro/i.test(plan) ? 'pro' : /max/i.test(plan) ? 'max' : 'codex'
+    return { key: 'codex', label: plan, cls, text: plan }
   }
   if (!vm?.has_token) return { key: 'none', label: '—', cls: 'none', text: '—' }
   if (vm.usage_has_fable === false)
