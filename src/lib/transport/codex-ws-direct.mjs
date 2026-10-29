@@ -15,22 +15,79 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import crypto from 'node:crypto'
-import wsPkg from 'ws'
+import * as wsPkg from 'ws'
 import { SocksProxyAgent } from 'socks-proxy-agent'
 
-const { WebSocket } = wsPkg
+const WebSocket = wsPkg.WebSocket ?? wsPkg.default
 
 export const WS_BETA = 'responses_websockets=2026-02-06'
 export const WS_PATH = '/backend-api/codex/responses'
 export const WS_CLI_UA =
   'codex_exec/0.165.0 (Debian 12.0.0; x86_64) unknown (codex_exec; 0.165.0)'
 
-/** 槽位是否走 WS：槽位字段优先，其次全局开关。默认关闭，避免未验证的链路影响业务。 */
+/**
+ * 槽位 WS 模式：
+ *   off         → 走 HTTP（默认）
+ *   ctx_pool    → 复用连接池里的连接（缓存收益最大）
+ *   passthrough → 每次新建连接（隔离性最好）
+ *   http_bridge → 入站 HTTP 也借 WS 发（等价 ctx_pool + 强一致）
+ */
+export function wsModeFor(vm, routing = null) {
+  const slotMode = vm?.transport?.ws_mode || vm?.codex?.transport?.ws_mode || null
+  const upstream = vm?.transport?.upstream ?? vm?.codex?.transport?.upstream ?? null
+  if (slotMode) return slotMode === 'off' ? 'off' : slotMode
+  if (upstream === 'ws') return 'ctx_pool'
+  if (upstream === 'http') return 'off'
+  if (routing?.codex?.ticket?.ws_transport === true) return 'ctx_pool'
+  return 'off'
+}
+
 export function wsTransportEnabled(vm, routing = null) {
-  const slotFlag = vm?.transport?.upstream ?? vm?.codex?.transport?.upstream ?? null
-  if (slotFlag === 'ws') return true
-  if (slotFlag === 'http') return false
-  return routing?.codex?.ticket?.ws_transport === true
+  return wsModeFor(vm, routing) !== 'off'
+}
+
+/** (槽位) → 已预热连接，供 ctx_pool 模式复用。 */
+const pool = new Map()
+const POOL_IDLE_MS = 5 * 60_000
+const POOL_MAX_AGE_MS = 55 * 60_000
+
+function poolGet(key) {
+  const entry = pool.get(key)
+  if (!entry) return null
+  if (entry.ws.readyState !== 1) {
+    pool.delete(key)
+    return null
+  }
+  if (Date.now() - entry.createdAt > POOL_MAX_AGE_MS || Date.now() - entry.lastUsed > POOL_IDLE_MS) {
+    try {
+      entry.turn?.close?.()
+    } catch {}
+    pool.delete(key)
+    return null
+  }
+  return entry
+}
+
+function poolSet(key, entry) {
+  pool.set(key, { ...entry, createdAt: Date.now(), lastUsed: Date.now() })
+}
+
+function poolTouch(key) {
+  const entry = pool.get(key)
+  if (entry) entry.lastUsed = Date.now()
+}
+
+function poolDrop(key) {
+  const entry = pool.get(key)
+  if (!entry) return
+  try {
+    entry.turn?.close?.()
+  } catch {}
+  pool.delete(key)
+}
+
+export function wsPoolSize() {
+  return pool.size
 }
 
 function connect({ token, sessionId, timeoutMs = 15_000, agent = null }) {
@@ -169,6 +226,7 @@ export async function openWsTurn({ token, sessionId, model, timeoutMs = 180_000,
   })
 
   let prewarmId = null
+  let lastResponseId = null
   const deadline = Date.now() + timeoutMs
   for await (const event of drain()) {
     if (event.responseId) prewarmId = event.responseId
@@ -177,14 +235,16 @@ export async function openWsTurn({ token, sessionId, model, timeoutMs = 180_000,
   }
 
   return {
+    socket: ws,
     prewarmId,
+    isOpen: () => ws.readyState === 1,
     /** 发真实请求，返回事件流。 */
     async *stream({ input, instructions, effort = 'medium', maxOutputTokens = null, signal = null }) {
       const body = {
         type: 'response.create',
         model,
         stream: true,
-        previous_response_id: prewarmId,
+        previous_response_id: lastResponseId || prewarmId,
         input,
         tool_choice: 'auto',
         parallel_tool_calls: false,
@@ -199,11 +259,16 @@ export async function openWsTurn({ token, sessionId, model, timeoutMs = 180_000,
       if (instructions) body.instructions = instructions
       if (maxOutputTokens) body.max_output_tokens = maxOutputTokens
       send(body)
+      let sawAny = false
       for await (const event of drain(signal)) {
+        sawAny = true
+        if (event.responseId) lastResponseId = event.responseId
         yield event
         if (event.type === 'response.completed' || event.type === 'response.failed') return
         if (event.type === 'error') return
       }
+      // 连接已被上游关掉、又没拿到任何事件：交给上层换新连接重试。
+      if (!sawAny) throw new Error('ws_connection_closed')
     },
     close() {
       try {
@@ -247,6 +312,12 @@ function socksAgent(exec) {
 }
 
 /** 把客户端 Responses body 转成 WS 的 input 数组（WS 不接受字符串 input）。 */
+/**
+ * 与 streamCodexKernelDirect 同接口的 WS 版本：
+ * 逐条把 WS 事件转成 SSE 行（`data: {...}`）喂给 onEvent，
+ * 这样上层的解析、记账、终止判断都不用改。
+ */
+/** 把客户端 Responses body 转成 WS 的 input 数组（WS 不接受字符串 input）。 */
 function toWsInput(body) {
   const raw = body?.input
   if (Array.isArray(raw) && raw.length) return raw
@@ -263,17 +334,35 @@ function toWsInput(body) {
  */
 export async function streamCodexWsDirect(args = {}) {
   const exec = args.exec || {}
+  const vm = exec?.vm || {}
+  const routing = args.routing || null
+  const mode = wsModeFor(vm, routing)
   const credential = readCredential(exec)
   if (!credential?.access) {
     return { ok: false, status: 401, headers: {}, body: { error: { code: 'no_access_token' } } }
   }
   const body = args.body || {}
-  const model = String(body.model || exec?.vm?.policy?.models?.[0] || 'gpt-6-astra')
-  const sessionId = String(args.envelope?.session?.session_id || exec?.vm?.id || crypto.randomUUID())
+  const model = String(body.model || vm?.policy?.models?.[0] || 'gpt-6-astra')
+  const sessionId = String(args.envelope?.session?.session_id || vm?.id || crypto.randomUUID())
   const agent = socksAgent(exec)
+  const poolKey = String(vm?.id || 'unknown')
 
-  const turn = await openWsTurn({ token: credential.access, sessionId, model, agent })
-  let status = 200
+  // ctx_pool / http_bridge 复用已预热的连接；passthrough 每次新建。
+  let turn = null
+  let reused = false
+  if (mode === 'ctx_pool' || mode === 'http_bridge') {
+    const hit = poolGet(poolKey)
+    if (hit) {
+      turn = hit.turn
+      reused = true
+      poolTouch(poolKey)
+    }
+  }
+  if (!turn) {
+    turn = await openWsTurn({ token: credential.access, sessionId, model, agent })
+    if (mode === 'ctx_pool' || mode === 'http_bridge') poolSet(poolKey, { turn, ws: turn.socket, sessionId })
+  }
+
   let ticket = null
   let sawCompleted = false
   const usageHolder = { usage: null }
@@ -289,28 +378,28 @@ export async function streamCodexWsDirect(args = {}) {
       if (event.turnState) ticket = event.turnState
       if (event.usage) usageHolder.usage = event.usage
       if (event.type === 'response.completed') sawCompleted = true
-      // 原样转成 SSE 行，上层按既有逻辑解析
       if (typeof args.onEvent === 'function') await args.onEvent(`data: ${JSON.stringify(event.raw)}\n`)
     }
   } catch (error) {
-    status = 502
+    // 连接坏了就丢掉池里的这条，下一次自动重建。
+    poolDrop(poolKey)
     return {
       ok: false,
-      status,
+      status: 502,
       headers: ticket ? { 'x-codex-turn-state': ticket } : {},
       body: { error: { code: 'ws_transport_error', message: String(error?.message || error) } },
       transportError: true,
     }
-  } finally {
-    turn.close()
   }
 
   return {
     ok: sawCompleted,
-    status,
+    status: 200,
     headers: ticket ? { 'x-codex-turn-state': ticket } : {},
     body: { usage: usageHolder.usage },
     usage: usageHolder.usage,
     missing_response_completed: !sawCompleted,
+    ws_mode: mode,
+    ws_reused: reused,
   }
 }

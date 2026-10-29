@@ -2860,10 +2860,18 @@ export function createPanelHandler(ctx) {
                   patch.policy = policy
                 }
                 if (hasTransport) {
-                  const upstream = String(body?.transport?.upstream || '').trim()
                   const transport = { ...(current.transport || {}) }
+                  const upstream = String(body?.transport?.upstream || '').trim()
+                  const wsMode = String(body?.transport?.ws_mode || '').trim()
                   if (upstream === 'ws' || upstream === 'http') transport.upstream = upstream
-                  else delete transport.upstream
+                  else if (upstream) delete transport.upstream
+                  if (['ctx_pool', 'passthrough', 'http_bridge', 'off'].includes(wsMode)) {
+                    transport.ws_mode = wsMode
+                    // 选模式即视为启用 WS（off 除外），避免两个字段互相打架。
+                    transport.upstream = wsMode === 'off' ? 'http' : 'ws'
+                  } else if (wsMode) {
+                    delete transport.ws_mode
+                  }
                   patch.transport = Object.keys(transport).length ? transport : null
                 }
                 return patch
