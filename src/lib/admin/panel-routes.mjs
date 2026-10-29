@@ -2063,6 +2063,29 @@ export function createPanelHandler(ctx) {
         }
       }
 
+      // POST /api/panel/ops/harvest/capability — 跑能力题并判分（candy/poker）
+      if (req.method === 'POST' && p === '/api/panel/ops/harvest/capability') {
+        const body = await readBody(req, 8192).catch(() => ({}))
+        const vmId = String(body?.vm_id || '').trim()
+        if (!vmId) return json(res, 400, { ok: false, error: { message: 'vm_id required' } })
+        try {
+          const { runCapabilityCheck } = await import('./ticket-harvest.mjs')
+          const { readCodexAccounts } = await import('../vm/codex-slot.mjs')
+          const vm = (await import('../vm/vm-registry.mjs')).getVm(cfg.paths.project, vmId)
+          const token = readCodexAccounts(cfg.paths.project, vmId).find((a) => a?.access_token)?.access_token || null
+          const result = await runCapabilityCheck({
+            vmId,
+            model: body?.model,
+            questionId: String(body?.question || 'candy'),
+            proxyUrl: vm?.proxy?.url || null,
+            token,
+          })
+          return json(res, 200, { ok: true, data: result })
+        } catch (e) {
+          return json(res, 500, { ok: false, error: { message: String(e?.message || e) } })
+        }
+      }
+
       // POST /api/panel/ops/harvest/borrow — 借票（来源票当引子 → 目标铸票 → 续接验证）
       if (req.method === 'POST' && p === '/api/panel/ops/harvest/borrow') {
         const body = await readBody(req, 8192).catch(() => ({}))

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Activity, AlertTriangle, Boxes, Handshake, Loader2, Play, TicketCheck } from 'lucide-react'
+import { Activity, AlertTriangle, Boxes, Brain, Handshake, Loader2, Play, TicketCheck } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -84,6 +84,8 @@ export function HarvestPane() {
   const [running, setRunning] = useState<string | null>(null)
   const [probing, setProbing] = useState<string | null>(null)
   const [borrowing, setBorrowing] = useState<string | null>(null)
+  const [checking, setChecking] = useState<string | null>(null)
+  const [capResults, setCapResults] = useState<Record<string, string>>({})
   const [borrowResults, setBorrowResults] = useState<Record<string, string>>({})
   const [probeResults, setProbeResults] = useState<Record<string, { verdict: string; shoot: any }>>({})
   const [filter, setFilter] = useState<'all' | 'ticket' | 'probe' | 'select' | 'candy'>('all')
@@ -124,6 +126,34 @@ export function HarvestPane() {
       toast.error(`打票失败：${(e as Error).message}`)
     } finally {
       setRunning(null)
+    }
+  }
+
+  async function capability(vmId: string, model: string, question = 'candy') {
+    const key = `${vmId}\u0000${model}`
+    setChecking(key)
+    try {
+      const r = await api<{ ok: boolean; answer: number | null; expected: number | null; verdict: string; http: number }>(
+        '/api/panel/ops/harvest/capability',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ vm_id: vmId, model, question }),
+        },
+      )
+      const text =
+        r.verdict === 'pass'
+          ? `能力题通过 · 答 ${r.answer}（期望 ${r.expected}）`
+          : r.verdict === 'recorded'
+            ? `能力题已记录 · 答 ${r.answer ?? '—'}（未校准，不判分）`
+            : `能力题未通过 · 答 ${r.answer ?? '—'}（期望 ${r.expected ?? '—'}）`
+      setCapResults((cur) => ({ ...cur, [key]: text }))
+      if (r.verdict === 'pass' || r.verdict === 'recorded') toast.success(text)
+      else toast.warning(text)
+    } catch (e) {
+      toast.error(`能力题失败：${(e as Error).message}`)
+    } finally {
+      setChecking(null)
     }
   }
 
@@ -433,6 +463,21 @@ export function HarvestPane() {
                           size='sm'
                           variant='ghost'
                           className='h-6 px-1.5 text-[11px]'
+                          disabled={checking === key}
+                          onClick={() => void capability(a.id, t.model)}
+                          title='能力题：糖果题答对说明档位正常（期望 21；降智号通常答 29）'
+                        >
+                          {checking === key ? (
+                            <Loader2 className='mr-1 h-3 w-3 animate-spin' />
+                          ) : (
+                            <Brain className='mr-1 h-3 w-3' />
+                          )}
+                          能力题
+                        </Button>
+                        <Button
+                          size='sm'
+                          variant='ghost'
+                          className='h-6 px-1.5 text-[11px]'
                           disabled={running === key || a.skip_harvest}
                           onClick={() => void run(a.id, t.model)}
                         >
@@ -445,6 +490,11 @@ export function HarvestPane() {
                         </Button>
                         </span>
                       </div>
+                      {capResults[key] ? (
+                        <div className='mt-1 rounded bg-black/5 px-2 py-1 font-mono text-[10px] dark:bg-white/10'>
+                          {capResults[key]}
+                        </div>
+                      ) : null}
                       {borrowResults[key] ? (
                         <div className='mt-1 rounded bg-black/5 px-2 py-1 font-mono text-[10px] dark:bg-white/10'>
                           {borrowResults[key]}

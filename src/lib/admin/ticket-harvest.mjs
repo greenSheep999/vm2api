@@ -42,6 +42,43 @@ const TINY_PROMPT = '只回复两个字符：OK'
  * 糖果题（sub 的 candy）。只记录答案，不判定对错 —— 期望值需要按号池基线校准，
  * 写死 21 会把整层模型误判成降智（我们实测 gpt-6 系一致答 29）。
  */
+const CAPABILITY_QUESTIONS = Object.freeze({
+  candy: {
+    id: 'candy',
+    expected: 21,
+    prompt:
+      '袋子里有三种口味糖果，每种有圆形和五角星两种形状（形状可摸出）。' +
+      '圆形：苹果7 桃子9 西瓜8；五角星：苹果7 桃子6 西瓜4。' +
+      '预先定好摸出个数，最少摸多少个才能保证同时拥有不同形状的苹果味和桃子味？只输出最终数字。',
+  },
+  poker: {
+    id: 'poker',
+    expected: null,
+    prompt:
+      '一副牌37张，背面蓝红两色翻前可见；花色黑桃红心梅花翻开可知。' +
+      '蓝背：黑桃6 红心4 梅花9；红背：黑桃3 红心8 梅花7。' +
+      '翻前定好总张数，每翻一张可根据已翻结果决定下一张翻蓝背还是红背。' +
+      '最少翻多少张才能保证同时有一张黑桃和一张红心且牌背颜色不同？只输出最终数字。',
+  },
+})
+
+/** 从回答里取最后一个整数并和期望值比对；没有期望值就只记录。 */
+export function judgeCapabilityAnswer(questionId, text) {
+  const question = CAPABILITY_QUESTIONS[questionId] || null
+  if (!question) return { question: questionId, answer: null, expected: null, verdict: 'unknown_question' }
+  const nums = String(text || '').match(/-?\d{1,5}/g) || []
+  const answer = nums.length ? Number(nums[nums.length - 1]) : null
+  if (question.expected == null) {
+    return { question: questionId, answer, expected: null, verdict: 'recorded' }
+  }
+  return {
+    question: questionId,
+    answer,
+    expected: question.expected,
+    verdict: answer === question.expected ? 'pass' : answer == null ? 'no_answer' : 'fail',
+  }
+}
+
 const CANDY_PROMPT =
   '袋子里有三种口味糖果，每种有圆形和五角星两种形状（形状可摸出）。' +
   '圆形：苹果7 桃子9 西瓜8；五角星：苹果7 桃子6 西瓜4。' +
@@ -431,20 +468,14 @@ export async function runTicketProbe({ projectRoot, vmId, model, edgeIp = null, 
   }
 
   let candy = null
-  if ((shot1.state || shot2?.state) && rawPolicy?.candy_observation) {
-    const shot = await mintShot({ edgeIp, proxyUrl, token, model: useModel, sessionId: `${sessionId}-candy`, prompt: CANDY_PROMPT })
-    const answer = /\b(\d{1,4})\b/.exec(shot.preview || '')?.[1] ?? null
-    candy = { http: shot.status, answer }
-    recordEvent({
-      kind: 'candy',
-      vm_id: vmId,
+  if ((shot1.state || shot2?.state) && rawPolicy?.candy_observation !== false) {
+    candy = await runCapabilityCheck({
+      vmId,
       model: useModel,
-      http_status: shot.status || null,
-      result: 'ok',
-      reason: answer ? `answer_${answer}` : 'no_number',
-      detail: (shot.preview || '').slice(-160),
-      proxy: proxyUrl,
-      edge_ip: edgeIp,
+      questionId: 'candy',
+      edgeIp,
+      proxyUrl,
+      token,
     })
   }
 
@@ -465,6 +496,52 @@ export async function runTicketProbe({ projectRoot, vmId, model, edgeIp = null, 
     route: { shot1: shot1.route || [], shot2: shot2?.route || [] },
     edge_ip: edgeIp,
   }
+}
+
+/**
+ * 跑一道能力题并就地对判分。
+ *
+ * 只有题库里给了期望答案的题才判 pass/fail；没有期望值的题只记录答案
+ * （避免拿未校准的题去判账号好坏）。
+ */
+export async function runCapabilityCheck({ vmId, model, questionId = 'candy', edgeIp = null, proxyUrl = null, token = null }) {
+  const question = CAPABILITY_QUESTIONS[questionId]
+  if (!question) return { ok: false, reason: 'unknown_question' }
+  const shot = await mintShot({
+    edgeIp,
+    proxyUrl,
+    token,
+    model,
+    sessionId: `cap-${vmId}-${questionId}-${Date.now().toString(36)}`,
+    prompt: question.prompt,
+  })
+  const judged = judgeCapabilityAnswer(questionId, extractText(shot.preview))
+  recordEvent({
+    kind: 'capability',
+    vm_id: vmId,
+    model,
+    http_status: shot.status || null,
+    result: judged.verdict === 'pass' ? 'ok' : judged.verdict === 'recorded' ? 'ok' : 'fail',
+    reason: `${questionId}:${judged.answer ?? '-'}/${judged.expected ?? '-'}`,
+    detail: extractText(shot.preview).slice(-200),
+    proxy: proxyUrl,
+    edge_ip: edgeIp,
+  })
+  return { ok: judged.verdict === 'pass' || judged.verdict === 'recorded', ...judged, http: shot.status }
+}
+
+/** SSE 流里抽出模型输出的纯文本（只取 delta 文本，忽略事件行）。 */
+function extractText(preview) {
+  const parts = []
+  for (const line of String(preview || '').split('\n')) {
+    if (!line.startsWith('data: ')) continue
+    try {
+      const ev = JSON.parse(line.slice(6))
+      const text = ev?.delta?.text || ev?.text || ev?.response?.output_text
+      if (typeof text === 'string' && text) parts.push(text)
+    } catch {}
+  }
+  return parts.join('') || String(preview || '')
 }
 
 /**
