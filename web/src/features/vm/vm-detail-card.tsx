@@ -17,6 +17,8 @@ import { credTypeLabel, credTypeOf } from '@/lib/cred-type'
 import { fmtExpiresAt, fmtNum, fmtUsd } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { compactEmail, isCodexVm, slotNameLabel } from '@/lib/vm-kind'
+import { ClaudeCacheMiniCard, CodexTicketMiniCard } from '@/features/vm/provider-mini-cards'
+import { UpstreamTransportCard } from '@/features/vm/upstream-transport-card'
 import {
   accountStatus,
   claudeTier,
@@ -141,6 +143,16 @@ function CardBody({ vm, accounts }: { vm: Vm; accounts?: UsageAccountRow[] }) {
 
       <VmSchedulingBlock vm={vm} />
       <VmMemoryBlock vm={vm} />
+
+      {/* 按 provider 显示专属设置：GPT 有门票与上游传输，Claude 有缓存档位。 */}
+      {isCodexVm(vm) ? (
+        <div className='grid gap-2 sm:grid-cols-2'>
+          <UpstreamTransportCard vm={vm} />
+          <CodexTicketMiniCard vm={vm} />
+        </div>
+      ) : (
+        <ClaudeCacheMiniCard vm={vm} />
+      )}
 
       <div className='grid gap-2 sm:grid-cols-2'>
         <Section title='今日'>
