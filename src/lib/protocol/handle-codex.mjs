@@ -679,7 +679,18 @@ export async function handleCodexProtocol({
   // Chat→Responses conversion can surface a session key the raw inbound lacked.
   if (!logBag.session_id) logBag.session_id = sessionIdForLog(callerSession)
   const firstUserIdentity = firstUserIdentityFromCodex(converted.body)
-  const hop = ops.streamCodexKernel || streamCodexKernel
+  // KIN_CODEX_DIRECT=1 时绕过预编译 kernel，由 Node 直连上游：
+  // 只有这条路能把 originator / version / OpenAI-Beta 真正发出去，
+  // 上游才会铸 x-codex-turn-state。
+  const directMode = process.env.KIN_CODEX_DIRECT === '1'
+  const hop =
+    ops.streamCodexKernel ||
+    (directMode
+      ? async (args) => {
+          const { streamCodexKernelDirect } = await import('../transport/codex-kernel-direct.mjs')
+          return streamCodexKernelDirect(args)
+        }
+      : streamCodexKernel)
   const writeCfg = ops.writeCodexKernelConfig || writeCodexKernelConfig
   const ensure = ops.ensureCodexKernel || ensureCodexKernel
   const anthropicSse = protocol === 'anthropic.messages' ? createAnthropicSseState() : null
@@ -783,7 +794,8 @@ export async function handleCodexProtocol({
           proxyRequired: true,
           routing,
         })
-        const ready = await ensure(execFor(projectRoot, vm))
+        // 直连模式不需要 kernel 在位。
+        const ready = directMode ? { ok: true } : await ensure(execFor(projectRoot, vm))
         if (!ready?.ok) {
           // Kernel init failed: this seat goes back and the next candidate is re-admitted.
           last = {

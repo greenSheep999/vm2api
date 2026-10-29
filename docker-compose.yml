@@ -21,6 +21,8 @@ services:
       KIN_EGRESS_BIN: /opt/vm2api/bin/kin-egress
       KIN_WORKER_BIN: /opt/vm2api/bin/kin-worker
       KIN_CODEX_KERNEL_BIN: /opt/vm2api/bin/kin-codex-kernel
+      # 1 = 绕过预编译 codex kernel，由 Node 直连上游（能带全身份头、能拿回合门票）。
+      KIN_CODEX_DIRECT: ${KIN_CODEX_DIRECT:-0}
       KIN_OAUTH_AUTH_BIN: /opt/vm2api/bin/kin-oauth-auth
       KIN_COMPUTER_BIN: ${KIN_COMPUTER_BIN:-/opt/vm2api/bin/kin-computer}
       KIN_AUTO_SYNC_WRAP: ${KIN_AUTO_SYNC_WRAP:-1}
