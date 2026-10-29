@@ -613,7 +613,7 @@ export async function handleCodexProtocol({
   const allowed = isCodexProtocolAllowed(protocol, { codex })
   if (!allowed.ok) {
     stats.errors++
-    logBag.via = directMode ? 'codex-direct' : 'codex-kernel'
+    logBag.via = 'codex-kernel'
     logBag.error_code = allowed.code
     return json(res, 400, {
       error: {
@@ -714,7 +714,7 @@ export async function handleCodexProtocol({
   const sameRetryDelay = Number(routing?.failover?.same_account_retry_delay_ms)
   const sameRetryDelayMs =
     Number.isFinite(sameRetryDelay) && sameRetryDelay >= 0 ? Math.min(10_000, sameRetryDelay) : 100
-  logBag.via = 'codex-kernel'
+  logBag.via = directMode ? 'codex-direct' : 'codex-kernel'
   logBag.attempt_count = 0
   let last = null
   let hops = 0

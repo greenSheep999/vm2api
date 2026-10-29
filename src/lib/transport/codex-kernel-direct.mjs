@@ -171,7 +171,9 @@ function buildHeaders(args, token) {
   }
   // UA 与 version 必须来自客户端本体：originator 说是 Desktop/Mac，UA 却写
   // codex_cli_rs/linux 会被上游当成伪造客户端。缺 UA 时才用默认值。
-  const ua = String(args?.envelope?.options?.user_agent || '').trim() || DEFAULT_UA
+  // 一律使用 Linux CLI 档案：routing 里配的 user_agent 是给 kernel 用的旧值，
+  // 与槽位操作系统不一致时会造成指纹矛盾。
+  const ua = DEFAULT_UA
   // 我们改写 session-id 时，window-id 与 turn-metadata 里的会话字段必须一起换，
   // 否则上游会看到「session-id 是 A，thread/window/metadata 还是 B」的两套会话。
   const sid = headers['session-id']
