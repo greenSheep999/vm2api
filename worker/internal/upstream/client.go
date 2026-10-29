@@ -341,6 +341,17 @@ func allowedHeader(key string) bool {
 	switch strings.ToLower(strings.TrimSpace(key)) {
 	case "accept",
 		"accept-language",
+		// Codex 身份头：缺了它们上游不铸 x-codex-turn-state，请求会被当成
+		// 非 Codex 客户端而降档（表现为「降智商」）。实测：只带 UA+token 无票，
+		// 补齐 originator/version/openai-beta 后立刻返回 780 字符的票。
+		"originator",
+		"version",
+		"openai-beta",
+		"session-id",
+		"session_id",
+		"x-codex-turn-state",
+		"x-codex-window-id",
+		"x-codex-installation-id",
 		"anthropic-beta",
 		"anthropic-dangerous-direct-browser-access",
 		"anthropic-version",

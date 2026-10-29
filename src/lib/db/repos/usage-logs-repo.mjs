@@ -946,6 +946,49 @@ export class UsageLogsRepo {
          GROUP BY 1,2 ORDER BY n DESC LIMIT 40`,
       )
       .all()
+    // 账号级门票明细：每个 (vm, model) 取最近一次观测，并统计窗口内的判定分布。
+    const ticketsByAccount = db
+      .prepare(
+        `SELECT vm_id,
+                model,
+                turn_state_verdict AS verdict,
+                turn_state_blocks AS blocks,
+                turn_state_len AS len,
+                turn_state_issued_at AS issued_at,
+                MAX(created_at) AS seen_at
+         FROM usage_logs
+         WHERE ${W} AND turn_state_verdict IS NOT NULL
+         GROUP BY vm_id, model
+         ORDER BY vm_id, model`,
+      )
+      .all()
+    const ticketCounts = db
+      .prepare(
+        `SELECT vm_id, model, turn_state_verdict AS verdict, COUNT(*) AS n
+         FROM usage_logs
+         WHERE ${W} AND turn_state_verdict IS NOT NULL
+         GROUP BY 1,2,3`,
+      )
+      .all()
+    // 降智结果：三类硬事实按账号聚合（模型被换 / effort 被降 / 门票异常）。
+    const iqResults = db
+      .prepare(
+        `SELECT vm_id,
+                COUNT(*) AS n,
+                SUM(CASE WHEN COALESCE(upstream_response_model,'') <> ''
+                          AND COALESCE(upstream_model,'') <> COALESCE(upstream_response_model,'')
+                         THEN 1 ELSE 0 END) AS model_mismatch,
+                SUM(CASE WHEN upstream_reasoning_effort IS NOT NULL
+                          AND reasoning_effort IS NOT NULL
+                          AND lower(upstream_reasoning_effort) <> lower(reasoning_effort)
+                         THEN 1 ELSE 0 END) AS effort_drop,
+                SUM(CASE WHEN turn_state_verdict IN ('absent','short','tall','malformed')
+                         THEN 1 ELSE 0 END) AS ticket_bad,
+                MAX(created_at) AS last_at
+         FROM usage_logs WHERE ${W}
+         GROUP BY vm_id ORDER BY n DESC`,
+      )
+      .all()
     const raw = db
       .prepare(
         `SELECT COUNT(*) AS requests,
@@ -978,6 +1021,9 @@ export class UsageLogsRepo {
       hours: h,
       tickets,
       ticketSlots,
+      ticketsByAccount,
+      ticketCounts,
+      iqResults,
       effort,
       modelMismatch: Number(mixed?.n) || 0,
       totals: { ...raw, ...cacheHitStats(raw) },

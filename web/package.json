@@ -11,7 +11,8 @@
     "format": "prettier --write src package.json vite.config.ts eslint.config.js",
     "format:check": "prettier --check src package.json vite.config.ts eslint.config.js",
     "test:contract": "vitest run src/features/vm/engine-contract.test.ts",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "dev:local": "VM2API_PREVIEW_OPS=1 VM2API_API_PROXY=https://vm2a.muxpay.xyz vite --port 5201 --strictPort --host 127.0.0.1"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

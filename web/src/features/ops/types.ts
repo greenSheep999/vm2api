@@ -2,11 +2,58 @@ export type OpsTicketBucket = { verdict: string; n: number }
 export type OpsTicketSlot = { vm_id: string; verdict: string; n: number }
 export type OpsEffortBucket = { asked: string; got: string; n: number }
 
+export type OpsTicketAccount = {
+  vm_id: string | null
+  model: string | null
+  verdict: string
+  blocks: number | null
+  len: number | null
+  issued_at: string | null
+  seen_at: string
+}
+
+export type OpsTicketCount = {
+  vm_id: string | null
+  model: string | null
+  verdict: string
+  n: number
+}
+
+export type OpsTicketPolicy = {
+  enabled: boolean
+  models: string[]
+  target_blocks: number
+  ttl_seconds: number
+  refresh_before_seconds: number
+  fail_closed: boolean
+  harvest_interval_seconds: number
+  harvest_cooldown_seconds: number
+  max_probes_per_round: number
+  harvest_proxies: string[]
+  edge_direct: boolean
+  edge_ips: string[]
+  candy_observation: boolean
+  gate_scheduling: boolean
+}
+
+export type OpsIqResult = {
+  vm_id: string | null
+  n: number
+  model_mismatch: number
+  effort_drop: number
+  ticket_bad: number
+  last_at: string
+}
+
 export type OpsSummary = {
   hours: number
   tickets: OpsTicketBucket[]
   ticketSlots: OpsTicketSlot[]
   effort: OpsEffortBucket[]
+  iqResults: OpsIqResult[]
+  ticketsByAccount: OpsTicketAccount[]
+  ticketCounts: OpsTicketCount[]
+  ticketPolicy: OpsTicketPolicy | null
   modelMismatch: number
   totals: {
     requests: number

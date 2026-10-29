@@ -1,8 +1,6 @@
 import {
   Boxes,
   Brain,
-  Coins,
-  TicketCheck,
   Workflow,
   Cable,
   ChartColumn,
@@ -46,10 +44,9 @@ const ALL_GROUPS: NavGroup[] = [
   {
     title: '智能运营',
     items: [
-      { title: '门票 · 打票', url: '/ops/ticket', icon: TicketCheck },
-      { title: '降智检测', url: '/ops/iq', icon: Brain },
-      { title: '缓存', url: '/ops/cache', icon: Coins },
-      { title: '调度策略', url: '/ops/sched', icon: Workflow },
+      // 左栏只留入口；打票/降智/缓存/调度都在页内右侧分区切换。
+      { title: '智能运营', url: '/ops', icon: Workflow },
+      { title: '降智结果', url: '/ops/results', icon: Brain },
     ],
   },
   {

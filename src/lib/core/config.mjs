@@ -219,6 +219,12 @@ export function loadConfig() {
     public_host: publicHost,
     base_url,
     api_key: apiKey,
+    // 打票专用出口（动态/轮换代理）。逗号分隔；空 = 只用槽位自身代理。
+    // 放 .env 而不是代码，避免凭据进仓库。
+    harvest_proxies: String(process.env.VM2API_HARVEST_PROXIES || '')
+      .split(',')
+      .map((v) => v.trim())
+      .filter((v) => /^(socks5h?|https?):\/\//i.test(v)),
     api_key_hash: hashKey(apiKey),
     // rewrite pipeline — DEFAULT OFF (passthrough preferred)
     rewrite: {

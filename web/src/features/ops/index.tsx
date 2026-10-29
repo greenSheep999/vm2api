@@ -12,7 +12,8 @@ import {
   type OpsTabId,
 } from './navigation'
 import type { OpsSummary } from './types'
-import { CachePane, IqPane, SchedPane, TicketPane } from './panes'
+import { CachePane, IqPane, SchedPane } from './panes'
+import { HarvestPane } from './harvest-pane'
 
 export function opsSummaryQueryOptions(hours = 24) {
   return {
@@ -63,7 +64,7 @@ export function OpsPage() {
           <QueryGate loading={summary.isPending} error={summary.error}>
             {summary.data ? (
               <>
-                {tab === 'ticket' ? <TicketPane data={summary.data} /> : null}
+                {tab === 'ticket' ? <HarvestPane /> : null}
                 {tab === 'iq' ? <IqPane data={summary.data} /> : null}
                 {tab === 'cache' ? <CachePane data={summary.data} /> : null}
                 {tab === 'sched' ? <SchedPane data={summary.data} /> : null}

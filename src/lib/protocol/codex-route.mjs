@@ -12,12 +12,107 @@ export const CODEX_UPSTREAM_TRANSPORTS = Object.freeze(['prefer_websocket', 'htt
 
 export const DEFAULT_INFERENCE_WEBSOCKET = Object.freeze({ enabled: true })
 
+/**
+ * 门票（打票）策略。字段对齐 sub2api 的 OpenAICodexTicketConfig，
+ * 但我们先只做「检测 + 策略登记」，harvest 执行器后续接。
+ */
+export const DEFAULT_CODEX_TICKET = Object.freeze({
+  enabled: false,
+  models: Object.freeze([]),
+  /** 0 = 按套餐自动（个人 10 块 / Team 12 块）。 */
+  target_blocks: 0,
+  ttl_seconds: 3600,
+  refresh_before_seconds: 300,
+  fail_closed: false,
+  harvest_interval_seconds: 3600,
+  harvest_cooldown_seconds: 600,
+  max_probes_per_round: 3,
+  /** 打票用的备用出口（socks5:// / http://）。空 = 只用槽位绑定的代理。 */
+  harvest_proxies: Object.freeze([]),
+  /**
+   * 直连模式：指定目标 Cloudflare 边缘 IP 打票（SNI 仍是 chatgpt.com、出口仍用槽位代理）。
+   * 这是打票最有效的杠杆 —— 换路由但不换身份。
+   */
+  edge_direct: false,
+  /** 候选边缘节点；空 = 由 DNS 决定（等价于现状）。 */
+  edge_ips: Object.freeze([]),
+  /** 票被真实请求用过之后，异步补一发糖果题，只记录能力值，不参与判定。 */
+  candy_observation: false,
+  /** 无有效票时把账号移出调度（sub 的「无票时暂停目标模型」）。 */
+  gate_scheduling: false,
+})
+
+export function normalizeCodexTicketPolicy(raw = {}) {
+  const src = asObject(raw) || {}
+  const models = Array.isArray(src.models)
+    ? Array.from(
+        new Set(
+          src.models
+            .map((m) => String(m || '').trim())
+            .filter((m) => m && m.length <= 100),
+        ),
+      ).slice(0, 16)
+    : []
+  const int = (value, fallback, min, max) => {
+    const n = Number(value)
+    if (!Number.isFinite(n)) return fallback
+    return Math.min(max, Math.max(min, Math.floor(n)))
+  }
+  return {
+    enabled: src.enabled === true,
+    models,
+    target_blocks: int(src.target_blocks, 0, 0, 64),
+    ttl_seconds: int(src.ttl_seconds, DEFAULT_CODEX_TICKET.ttl_seconds, 60, 86_400),
+    refresh_before_seconds: int(
+      src.refresh_before_seconds,
+      DEFAULT_CODEX_TICKET.refresh_before_seconds,
+      0,
+      3600,
+    ),
+    fail_closed: src.fail_closed === true,
+    harvest_interval_seconds: int(
+      src.harvest_interval_seconds,
+      DEFAULT_CODEX_TICKET.harvest_interval_seconds,
+      60,
+      86_400,
+    ),
+    harvest_cooldown_seconds: int(
+      src.harvest_cooldown_seconds,
+      DEFAULT_CODEX_TICKET.harvest_cooldown_seconds,
+      0,
+      86_400,
+    ),
+    max_probes_per_round: int(
+      src.max_probes_per_round,
+      DEFAULT_CODEX_TICKET.max_probes_per_round,
+      1,
+      32,
+    ),
+    edge_direct: src.edge_direct === true,
+    candy_observation: src.candy_observation === true,
+    gate_scheduling: src.gate_scheduling === true,
+    edge_ips: Array.isArray(src.edge_ips)
+      ? src.edge_ips
+          .map((ip) => String(ip || '').trim())
+          .filter((ip) => /^[0-9a-fA-F:.]+$/.test(ip) && ip.length <= 45)
+          .slice(0, 24)
+      : [],
+    harvest_proxies: Array.isArray(src.harvest_proxies)
+      ? src.harvest_proxies
+          .map((url) => String(url || '').trim())
+          .filter((url) => /^(socks5h?|https?):\/\//i.test(url) && url.length <= 300)
+          .slice(0, 20)
+      : [],
+  }
+}
+
 export const DEFAULT_CODEX_ROUTING = Object.freeze({
   enabled: true,
   // `auto` resolves the official Codex catalog client version at sync time,
   // falling back to 0.160.0 when the registry is unavailable.
   catalog_client_version: 'auto',
   user_agent: DEFAULT_CODEX_USER_AGENT,
+  ticket: DEFAULT_CODEX_TICKET,
   upstream_transport: 'prefer_websocket',
   websocket: { enabled: true },
   client_features: { enabled: false },
@@ -148,6 +243,7 @@ export function normalizeCodexRouting(raw = {}) {
     },
     clients,
     quota: normalizeOpenAIQuotaPolicy(src.quota),
+    ticket: normalizeCodexTicketPolicy(src.ticket),
     model_mappings: normalizeCodexModelMappings(src.model_mappings),
   }
 }

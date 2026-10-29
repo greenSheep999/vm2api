@@ -38,16 +38,22 @@ test('期望长度：10 块 290、12 块 332（base64url 无填充）', () => {
   assert.equal(makeTicket(12).length, 332)
 })
 
-test('恰好等于期望才判 ok', () => {
+test('信封合法即 ok（不再要求块数等于某常数）', () => {
   assert.equal(judgeTurnState(makeTicket(10), 'plus').verdict, 'ok')
   assert.equal(judgeTurnState(makeTicket(12), 'team').verdict, 'ok')
+  // 实测上游现在发 33 块（780 字符），也必须判 ok。
+  assert.equal(judgeTurnState(makeTicket(33), 'plus').verdict, 'ok')
 })
 
-test('块数不足判 short，块数超出判 tall（不再和 ok 混淆）', () => {
-  assert.equal(judgeTurnState(makeTicket(10), 'team').verdict, 'short')
-  const tall = judgeTurnState(makeTicket(12), 'plus')
-  assert.equal(tall.verdict, 'tall')
-  assert.equal(tall.blocks, 12)
+test('块数只记录，期望值作为参考返回', () => {
+  const r = judgeTurnState(makeTicket(12), 'team')
+  assert.equal(r.verdict, 'ok')
+  assert.equal(r.blocks, 12)
+  assert.equal(r.expected_blocks, 12)
+  const odd = judgeTurnState(makeTicket(33), 'plus')
+  assert.equal(odd.verdict, 'ok')
+  assert.equal(odd.blocks, 33)
+  assert.equal(odd.expected_blocks, 10)
 })
 
 test('无票、乱码、信封错误分别归类', () => {

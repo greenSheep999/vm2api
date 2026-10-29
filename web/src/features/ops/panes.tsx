@@ -1,7 +1,6 @@
-import { AlertTriangle, CheckCircle2, Clock, TicketX } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
-import { formatTokenAmount, formatDuration } from '@/lib/usage-format'
+import { CheckCircle2, Clock, TicketX } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { formatDuration, formatTokenAmount } from '@/lib/usage-format'
 import type { OpsSummary } from './types'
 
 const CARD = 'rounded-lg border bg-card p-4'
@@ -32,110 +31,6 @@ function Stat({
         {value}
       </div>
       {hint ? <div className='mt-0.5 text-[10px] text-muted-foreground'>{hint}</div> : null}
-    </div>
-  )
-}
-
-function verdictLabel(v: string) {
-  switch (v) {
-    case 'ok':
-      return '正常'
-    case 'short':
-      return '块数不足'
-    case 'tall':
-      return '块数超出'
-    case 'malformed':
-      return '信封不合法'
-    case 'absent':
-      return '无票（裸打）'
-    default:
-      return '未采集'
-  }
-}
-
-function verdictTone(v: string): 'good' | 'warn' | 'bad' | 'neutral' {
-  if (v === 'ok') return 'good'
-  if (v === 'uncollected') return 'neutral'
-  if (v === 'short' || v === 'tall' || v === 'malformed') return 'warn'
-  return 'bad'
-}
-
-export function TicketPane({ data }: { data: OpsSummary }) {
-  const total = data.totals.requests || 0
-  const bucket = (v: string) => data.tickets.find((t) => t.verdict === v)?.n ?? 0
-  const absent = bucket('absent')
-  const ok = bucket('ok')
-  const bad = bucket('short') + bucket('tall') + bucket('malformed')
-
-  return (
-    <div className='space-y-4'>
-      <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-4'>
-        <Stat label='请求数（24h）' value={String(total)} />
-        <Stat label='门票正常' value={String(ok)} tone={ok ? 'good' : 'neutral'} />
-        <Stat
-          label='无票（裸打）'
-          value={String(absent)}
-          tone={absent ? 'bad' : 'good'}
-          hint={total ? `${Math.round((absent / total) * 100)}% 的请求没有回带门票` : undefined}
-        />
-        <Stat
-          label='块数异常'
-          value={String(bad)}
-          tone={bad ? 'warn' : 'good'}
-          hint='不足 / 超出 / 信封不合法'
-        />
-      </div>
-
-      {absent > 0 ? (
-        <div className='flex gap-2 rounded-lg border border-amber-200 bg-amber-50/60 p-3 text-xs text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300'>
-          <AlertTriangle className='mt-0.5 h-4 w-4 shrink-0' />
-          <span>
-            上游没有给我们铸票。按 sub2api 的模型，无票请求会被当成非正常客户端、
-            可能被降档服务（表现为「变笨」）。下一步是区分「上游不铸」还是「transport 丢头」。
-          </span>
-        </div>
-      ) : null}
-
-      <section className={CARD}>
-        <h4 className='mb-3 text-sm font-semibold'>按账号</h4>
-        <div className='space-y-1.5'>
-          {data.ticketSlots.length === 0 ? (
-            <p className='text-xs text-muted-foreground'>窗口内没有请求。</p>
-          ) : (
-            data.ticketSlots.map((s) => (
-              <div
-                key={`${s.vm_id}-${s.verdict}`}
-                className='flex items-center justify-between gap-3 text-xs'
-              >
-                <span className='font-mono'>{s.vm_id ?? '—'}</span>
-                <span className='flex items-center gap-2'>
-                  <Badge
-                    variant='outline'
-                    className={cn(
-                      'px-1 py-0 text-[10px] leading-tight',
-                      verdictTone(s.verdict) === 'good'
-                        ? 'border-emerald-300 text-emerald-700 dark:text-emerald-300'
-                        : verdictTone(s.verdict) === 'bad'
-                          ? 'border-rose-300 text-rose-700 dark:text-rose-300'
-                          : verdictTone(s.verdict) === 'warn'
-                            ? 'border-amber-300 text-amber-700 dark:text-amber-300'
-                            : 'text-muted-foreground',
-                    )}
-                  >
-                    {verdictLabel(s.verdict)}
-                  </Badge>
-                  <span className='tabular-nums text-muted-foreground'>n={s.n}</span>
-                </span>
-              </div>
-            ))
-          )}
-        </div>
-      </section>
-
-      <p className='text-[11px] leading-relaxed text-muted-foreground'>
-        判据：base64url → 0x80 信封 → 块数 = (len-57)/16；个人版期望 10 块、Team 系 12 块，
-        只有恰好相等才算正常。详见 docs/ops/ticketing.md。
-      </p>
     </div>
   )
 }

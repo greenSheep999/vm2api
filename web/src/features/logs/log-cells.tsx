@@ -136,18 +136,43 @@ export function ModelDisplayWithRedirect({
           <span className='truncate'>{audit.sentUpstreamModel}</span>
         </div>
       ) : null}
-      {row.turnStateVerdict && row.turnStateVerdict !== 'ok' ? (
-        <div className='flex min-w-0 items-center gap-1 truncate text-[10px] text-rose-600 dark:text-rose-400'>
-          <span className='shrink-0'>
-            {row.turnStateVerdict === 'absent'
-              ? '无门票'
-              : row.turnStateVerdict === 'short'
-                ? `门票块数不足 ${row.turnStateBlocks ?? '?'}`
-                : row.turnStateVerdict === 'tall'
-                  ? `门票块数超出 ${row.turnStateBlocks ?? '?'}`
-                  : '门票不合法'}
-          </span>
-        </div>
+      {row.turnStateVerdict ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className='flex min-w-0 items-center gap-1 truncate'>
+              <Badge
+                variant='outline'
+                className={cn(
+                  'shrink-0 px-1 text-[10px] leading-tight',
+                  row.turnStateVerdict === 'ok'
+                    ? 'border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-300'
+                    : 'border-rose-300 text-rose-700 dark:border-rose-700 dark:text-rose-300',
+                )}
+              >
+                {row.turnStateVerdict === 'ok'
+                  ? `满血${row.turnStateLen ? ` · ${row.turnStateLen}字` : ''}`
+                  : row.turnStateVerdict === 'absent'
+                    ? '降智 · 无票'
+                    : `票异常${row.turnStateLen ? ` · ${row.turnStateLen}字` : ''}`}
+              </Badge>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent className='max-w-xs space-y-1 text-xs'>
+            <div className='font-medium'>
+              {row.turnStateVerdict === 'ok' ? '账号满血' : '账号降智'}
+            </div>
+            <div>
+              门票: {row.turnStateVerdict === 'ok' ? '正常' : row.turnStateVerdict === 'absent' ? '上游未铸票' : '信封异常'}
+              {row.turnStateBlocks ? ` · ${row.turnStateBlocks} 块` : ''}
+            </div>
+            <div>判定口径: 两发探针（裸打铸票 → 带票续接是否重铸）</div>
+            <div className='text-primary-foreground/75'>
+              {row.turnStateVerdict === 'ok'
+                ? '票延续正常，请求按完整档位服务。'
+                : '无票请求会被当成非 Codex 客户端、可能被降档服务，表现为「变笨」。'}
+            </div>
+          </TooltipContent>
+        </Tooltip>
       ) : null}
       {audit.effortDowngraded ? (
         <div className='flex min-w-0 items-center gap-1 truncate text-xs text-rose-600 dark:text-rose-400'>

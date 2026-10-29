@@ -2023,6 +2023,90 @@ export function createPanelHandler(ctx) {
         return
       }
       // ---- Aggregated usage stats from request_logs (charts) ----
+      // GET /api/panel/ops/harvest — 打票面板：策略 + 账号（含逐账号开关）+ 事件流
+      if (req.method === 'GET' && p === '/api/panel/ops/harvest') {
+        try {
+          const { harvestOverview } = await import('./ticket-harvest.mjs')
+          const routing = ctx.routingConfig || {}
+          return json(res, 200, {
+            ok: true,
+            data: {
+              ...harvestOverview(cfg.paths.project),
+              policy: routing?.codex?.ticket || null,
+            },
+          })
+        } catch (e) {
+          return json(res, 500, { ok: false, error: { message: String(e?.message || e) } })
+        }
+      }
+
+      // POST /api/panel/ops/harvest/skip — 逐账号启停打票
+      if (req.method === 'POST' && p === '/api/panel/ops/harvest/skip') {
+        const body = await readBody(req, 8192).catch(() => ({}))
+        const vmId = String(body?.vm_id || '').trim()
+        if (!vmId) return json(res, 400, { ok: false, error: { message: 'vm_id required' } })
+        if (typeof body?.skip !== 'boolean') {
+          return json(res, 400, { ok: false, error: { message: 'skip required' } })
+        }
+        try {
+          const { setSkipHarvest, recordEvent } = await import('./ticket-harvest.mjs')
+          const result = setSkipHarvest(vmId, body.skip)
+          recordEvent({
+            kind: 'select',
+            vm_id: vmId,
+            result: body.skip ? 'skip' : 'ok',
+            reason: body.skip ? 'skip_harvest' : 'enable_harvest',
+          })
+          return json(res, 200, { ok: true, data: result })
+        } catch (e) {
+          return json(res, 500, { ok: false, error: { message: String(e?.message || e) } })
+        }
+      }
+
+      // POST /api/panel/ops/harvest/probe — 两发门票探针（裸打 + 续接）
+      if (req.method === 'POST' && p === '/api/panel/ops/harvest/probe') {
+        const body = await readBody(req, 8192).catch(() => ({}))
+        const vmId = String(body?.vm_id || '').trim()
+        if (!vmId) return json(res, 400, { ok: false, error: { message: 'vm_id required' } })
+        try {
+          const { runTicketProbe } = await import('./ticket-harvest.mjs')
+          const policy = ctx.routingConfig?.codex?.ticket || {}
+          const edgeIp =
+            String(body?.edge_ip || '').trim() ||
+            (policy.edge_direct ? (policy.edge_ips || [])[0] || null : null)
+          const result = await runTicketProbe({
+            projectRoot: cfg.paths.project,
+            vmId,
+            model: body?.model,
+            edgeIp,
+            policy,
+          })
+          return json(res, 200, { ok: true, data: result })
+        } catch (e) {
+          return json(res, 500, { ok: false, error: { message: String(e?.message || e) } })
+        }
+      }
+
+      // POST /api/panel/ops/harvest/run — 手动打票（单账号单模型）
+      if (req.method === 'POST' && p === '/api/panel/ops/harvest/run') {
+        const body = await readBody(req, 8192).catch(() => ({}))
+        const vmId = String(body?.vm_id || '').trim()
+        if (!vmId) return json(res, 400, { ok: false, error: { message: 'vm_id required' } })
+        try {
+          const { runHarvest } = await import('./ticket-harvest.mjs')
+          const result = await runHarvest({
+            cfg,
+            projectRoot: cfg.paths.project,
+            vmId,
+            model: body?.model,
+            policy: ctx.routingConfig?.codex?.ticket || null,
+          })
+          return json(res, 200, { ok: true, data: result })
+        } catch (e) {
+          return json(res, 500, { ok: false, error: { message: String(e?.message || e) } })
+        }
+      }
+
       // GET /api/panel/ops/summary — 智能运营总览（门票/缓存/effort/流量）
       if (req.method === 'GET' && p === '/api/panel/ops/summary') {
         const u = new URL(req.url, 'http://x')
@@ -2044,6 +2128,7 @@ export function createPanelHandler(ctx) {
                 usage_probe_enabled: routing?.usage_probe?.enabled ?? true,
                 usage_probe_configured: routing?.usage_probe?.enabled !== undefined,
               },
+              ticketPolicy: routing?.codex?.ticket || null,
             },
           })
         } catch (e) {

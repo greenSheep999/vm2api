@@ -84,13 +84,17 @@ export function parseTurnState(value) {
 }
 
 /**
- * 把票和套餐期望对比，给一个可入库的结论。
+ * 给一张票下结论。
  *
- * - `absent`   没有票（上游没给）
- * - `malformed` 信封不合法
- * - `short`    块数低于该套餐期望（降级/限流信号）
- * - `tall`     块数高于期望（套餐/信封格式与假设不符，不可当作 ok）
- * - `ok`       块数恰好等于套餐期望
+ * 早期按 sub2api 的 292/332 字符格式写死了「个人 10 块 / Team 12 块」，
+ * 但实测上游现在发的是 **780 字符**（33 块）的信封 —— 格式已经变了。
+ * 所以不再要求块数等于某个常数，只判信封是否合法：
+ *
+ * - `absent`    上游没给票（真正的降级信号）
+ * - `malformed` 给了但信封不合法
+ * - `ok`        信封合法（块数只记录，用于观察趋势）
+ *
+ * 期望块数仍作为参考值返回，供面板显示，不参与判定。
  */
 export function judgeTurnState(value, planType) {
   const parsed = parseTurnState(value)
@@ -104,21 +108,12 @@ export function judgeTurnState(value, planType) {
       reason: parsed.reason,
     }
   }
-  const expected = expectedTurnStateBlocks(planType)
-  // 严格判据：只有块数**恰好**等于该套餐期望才算 ok。
-  // 少了是降级信号，多了说明套餐或信封格式变了对不上我们的假设，同样不能当 ok。
-  const verdict = parsed.blocks < expected ? 'short' : parsed.blocks > expected ? 'tall' : 'ok'
-  const reason =
-    verdict === 'short'
-      ? `blocks_below_${expected}`
-      : verdict === 'tall'
-        ? `blocks_above_${expected}`
-        : `blocks_${expected}`
   return {
-    verdict,
+    verdict: 'ok',
     blocks: parsed.blocks,
     len: parsed.len,
     issued_at: parsed.issued_at,
-    reason,
+    expected_blocks: expectedTurnStateBlocks(planType),
+    reason: `blocks_${parsed.blocks}`,
   }
 }

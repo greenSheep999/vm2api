@@ -19,6 +19,7 @@ export type ViewId =
   | 'users'
   | 'wrap'
   | 'ops'
+  | 'ops/results'
 
 export const VIEW_TITLES: Record<ViewId, string> = {
   overview: '总览',
@@ -41,6 +42,7 @@ export const VIEW_TITLES: Record<ViewId, string> = {
   users: '用户',
   wrap: '内核',
   ops: '智能运营',
+  'ops/results': '降智结果',
 }
 
 // 监控组四页的职责边界，避免同一块数据在多页重复出现。
