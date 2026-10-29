@@ -103,24 +103,6 @@ function ticketState(t: HarvestTicket): TicketState {
   return 'valid'
 }
 
-function chipClass(t: HarvestTicket) {
-  switch (ticketState(t)) {
-    case 'valid':
-      return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300'
-    case 'expiring':
-      return 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300'
-    case 'expired':
-      // 掉了就没有颜色：中性灰，不再显示成「有票」的绿色
-      return 'bg-muted/60 text-muted-foreground'
-    case 'missing':
-      return 'bg-muted text-muted-foreground'
-    case 'error':
-      return 'bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300'
-    default:
-      return 'bg-muted text-muted-foreground'
-  }
-}
-
 function remainingText(t: HarvestTicket) {
   if (!t.expires_at) return '有效期 —'
   const ms = Date.parse(t.expires_at) - Date.now()
@@ -462,9 +444,16 @@ export function HarvestPane() {
                   return (
                     <div
                       key={t.model}
-                      className={cn('rounded-md px-2.5 py-2 text-xs', chipClass(t))}
+                      className={cn(
+                        'rounded-lg border border-l-2 bg-card px-2.5 py-2 text-xs',
+                        t.probe_verdict === 'healthy' || t.probe_verdict === 'healthy_same'
+                          ? 'border-l-emerald-500'
+                          : t.probe_verdict === 'degraded' || t.probe_verdict === 'route_changed'
+                            ? 'border-l-rose-500'
+                            : 'border-l-muted-foreground/30',
+                      )}
                     >
-                      <div className='flex flex-wrap items-center justify-between gap-2'>
+                      <div className='flex flex-wrap items-center justify-between gap-2 border-b pb-1.5'>
                         <span className='flex flex-wrap items-center gap-2 font-mono font-medium'>
                           {t.model}
                           {/* 主状态 = 账号档位（票能不能续）；票本身几乎每次都有，不作为主状态。 */}
@@ -486,7 +475,16 @@ export function HarvestPane() {
                                   ? '路由漂移'
                                   : '未探针'}
                           </span>
-                          <span className='text-[10px] text-muted-foreground'>
+                          <span
+                            className={cn(
+                              'text-[10px]',
+                              ticketState(t) === 'valid'
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : ticketState(t) === 'expiring'
+                                  ? 'text-amber-600 dark:text-amber-400'
+                                  : 'text-muted-foreground',
+                            )}
+                          >
                             {t.verdict === 'ok'
                               ? `票 ${t.len ?? 0} 字 · ${remainingText(t)}`
                               : t.verdict === 'absent'
