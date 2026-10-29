@@ -923,6 +923,66 @@ export class UsageLogsRepo {
    * `models` / `endpoints` are ranked by request count and capped; `endpoints`
    * is the inbound request path (usage_logs keeps no separate upstream endpoint).
    */
+  /**
+   * 智能运营总览：门票 / 缓存 / effort 回显 / 流量健康。
+   *
+   * 只读聚合，不做判定；判定与动作在运营模块里做。created_at 是 RFC3339，
+   * 必须先 replace('T',' ') 再和 datetime('now') 比较。
+   */
+  opsSummary({ hours = 24 } = {}) {
+    const h = Math.max(1, Math.min(24 * 30, Math.floor(Number(hours) || 24)))
+    const db = getDb()
+    const W = `datetime(replace(created_at,'T',' ')) > datetime('now', '-${h} hours')`
+    const tickets = db
+      .prepare(
+        `SELECT COALESCE(turn_state_verdict,'uncollected') AS verdict, COUNT(*) AS n
+         FROM usage_logs WHERE ${W} GROUP BY 1 ORDER BY n DESC`,
+      )
+      .all()
+    const ticketSlots = db
+      .prepare(
+        `SELECT vm_id, COALESCE(turn_state_verdict,'uncollected') AS verdict, COUNT(*) AS n
+         FROM usage_logs WHERE ${W} GROUP BY 1,2 ORDER BY n DESC LIMIT 40`,
+      )
+      .all()
+    const raw = db
+      .prepare(
+        `SELECT COUNT(*) AS requests,
+                COALESCE(SUM(CASE WHEN status=200 THEN 1 ELSE 0 END),0) AS ok,
+                COALESCE(SUM(input_tokens),0) AS input_tokens,
+                COALESCE(SUM(output_tokens),0) AS output_tokens,
+                COALESCE(SUM(cache_read_tokens),0) AS cache_read_tokens,
+                COALESCE(SUM(cache_creation_tokens),0) AS cache_creation_tokens,
+                ROUND(AVG(CASE WHEN status=200 THEN first_token_ms END)) AS avg_ttft_ms,
+                ROUND(AVG(CASE WHEN status=200 THEN first_byte_ms END)) AS avg_first_byte_ms
+         FROM usage_logs WHERE ${W}`,
+      )
+      .get()
+    const effort = db
+      .prepare(
+        `SELECT COALESCE(reasoning_effort,'(空)') AS asked,
+                COALESCE(upstream_reasoning_effort,'(未采集)') AS got,
+                COUNT(*) AS n
+         FROM usage_logs WHERE ${W} GROUP BY 1,2 ORDER BY n DESC LIMIT 12`,
+      )
+      .all()
+    const mixed = db
+      .prepare(
+        `SELECT COUNT(*) AS n FROM usage_logs
+         WHERE ${W} AND COALESCE(upstream_response_model,'') <> ''
+           AND COALESCE(upstream_model,'') <> COALESCE(upstream_response_model,'')`,
+      )
+      .get()
+    return {
+      hours: h,
+      tickets,
+      ticketSlots,
+      effort,
+      modelMismatch: Number(mixed?.n) || 0,
+      totals: { ...raw, ...cacheHitStats(raw) },
+    }
+  }
+
   vmUsageStats({ vmId, days = 30 } = {}) {
     return this._usageWindow({
       vmId,

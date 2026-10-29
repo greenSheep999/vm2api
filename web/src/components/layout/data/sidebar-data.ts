@@ -1,5 +1,9 @@
 import {
   Boxes,
+  Brain,
+  Coins,
+  TicketCheck,
+  Workflow,
   Cable,
   ChartColumn,
   Cpu,
@@ -37,6 +41,15 @@ const ALL_GROUPS: NavGroup[] = [
       { title: '导入', url: '/import', icon: Download },
       { title: '规格', url: '/specs', icon: Cpu },
       { title: '代理', url: '/proxies', icon: Cable },
+    ],
+  },
+  {
+    title: '智能运营',
+    items: [
+      { title: '门票 · 打票', url: '/ops/ticket', icon: TicketCheck },
+      { title: '降智检测', url: '/ops/iq', icon: Brain },
+      { title: '缓存', url: '/ops/cache', icon: Coins },
+      { title: '调度策略', url: '/ops/sched', icon: Workflow },
     ],
   },
   {

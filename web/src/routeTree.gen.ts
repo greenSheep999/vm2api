@@ -30,6 +30,8 @@ import { Route as AuthenticatedStatisticsRouteImport } from './routes/_authentic
 import { Route as AuthenticatedSystemRouteImport } from './routes/_authenticated/system'
 import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
 import { Route as AuthenticatedWrapRouteImport } from './routes/_authenticated/wrap'
+import { Route as AuthenticatedOpsIndexRouteImport } from './routes/_authenticated/ops/index'
+import { Route as AuthenticatedOpsTabRouteImport } from './routes/_authenticated/ops/$tab'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
 import { Route as AuthenticatedSettingsTabRouteImport } from './routes/_authenticated/settings/$tab'
 import { Route as AuthenticatedVmIndexRouteImport } from './routes/_authenticated/vm/index'
@@ -139,6 +141,16 @@ const AuthenticatedWrapRoute = AuthenticatedWrapRouteImport.update({
   path: '/wrap',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedOpsIndexRoute = AuthenticatedOpsIndexRouteImport.update({
+  id: '/ops/',
+  path: '/ops/',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedOpsTabRoute = AuthenticatedOpsTabRouteImport.update({
+  id: '/ops/$tab',
+  path: '/ops/$tab',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedSettingsIndexRoute =
   AuthenticatedSettingsIndexRouteImport.update({
     id: '/settings/',
@@ -183,8 +195,10 @@ export interface FileRoutesByFullPath {
   '/system': typeof AuthenticatedSystemRoute
   '/users': typeof AuthenticatedUsersRoute
   '/wrap': typeof AuthenticatedWrapRoute
+  '/ops/$tab': typeof AuthenticatedOpsTabRoute
   '/settings/$tab': typeof AuthenticatedSettingsTabRoute
   '/vm/$id': typeof AuthenticatedVmIdRoute
+  '/ops/': typeof AuthenticatedOpsIndexRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
   '/vm/': typeof AuthenticatedVmIndexRoute
 }
@@ -209,8 +223,10 @@ export interface FileRoutesByTo {
   '/users': typeof AuthenticatedUsersRoute
   '/wrap': typeof AuthenticatedWrapRoute
   '/': typeof AuthenticatedIndexRoute
+  '/ops/$tab': typeof AuthenticatedOpsTabRoute
   '/settings/$tab': typeof AuthenticatedSettingsTabRoute
   '/vm/$id': typeof AuthenticatedVmIdRoute
+  '/ops': typeof AuthenticatedOpsIndexRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
   '/vm': typeof AuthenticatedVmIndexRoute
 }
@@ -237,8 +253,10 @@ export interface FileRoutesById {
   '/_authenticated/users': typeof AuthenticatedUsersRoute
   '/_authenticated/wrap': typeof AuthenticatedWrapRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/ops/$tab': typeof AuthenticatedOpsTabRoute
   '/_authenticated/settings/$tab': typeof AuthenticatedSettingsTabRoute
   '/_authenticated/vm/$id': typeof AuthenticatedVmIdRoute
+  '/_authenticated/ops/': typeof AuthenticatedOpsIndexRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
   '/_authenticated/vm/': typeof AuthenticatedVmIndexRoute
 }
@@ -265,8 +283,10 @@ export interface FileRouteTypes {
     | '/system'
     | '/users'
     | '/wrap'
+    | '/ops/$tab'
     | '/settings/$tab'
     | '/vm/$id'
+    | '/ops/'
     | '/settings/'
     | '/vm/'
   fileRoutesByTo: FileRoutesByTo
@@ -291,8 +311,10 @@ export interface FileRouteTypes {
     | '/users'
     | '/wrap'
     | '/'
+    | '/ops/$tab'
     | '/settings/$tab'
     | '/vm/$id'
+    | '/ops'
     | '/settings'
     | '/vm'
   id:
@@ -318,8 +340,10 @@ export interface FileRouteTypes {
     | '/_authenticated/users'
     | '/_authenticated/wrap'
     | '/_authenticated/'
+    | '/_authenticated/ops/$tab'
     | '/_authenticated/settings/$tab'
     | '/_authenticated/vm/$id'
+    | '/_authenticated/ops/'
     | '/_authenticated/settings/'
     | '/_authenticated/vm/'
   fileRoutesById: FileRoutesById
@@ -479,6 +503,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedWrapRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/ops/': {
+      id: '/_authenticated/ops/'
+      path: '/ops'
+      fullPath: '/ops/'
+      preLoaderRoute: typeof AuthenticatedOpsIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/ops/$tab': {
+      id: '/_authenticated/ops/$tab'
+      path: '/ops/$tab'
+      fullPath: '/ops/$tab'
+      preLoaderRoute: typeof AuthenticatedOpsTabRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/settings/': {
       id: '/_authenticated/settings/'
       path: '/settings'
@@ -529,8 +567,10 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedUsersRoute: typeof AuthenticatedUsersRoute
   AuthenticatedWrapRoute: typeof AuthenticatedWrapRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedOpsTabRoute: typeof AuthenticatedOpsTabRoute
   AuthenticatedSettingsTabRoute: typeof AuthenticatedSettingsTabRoute
   AuthenticatedVmIdRoute: typeof AuthenticatedVmIdRoute
+  AuthenticatedOpsIndexRoute: typeof AuthenticatedOpsIndexRoute
   AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
   AuthenticatedVmIndexRoute: typeof AuthenticatedVmIndexRoute
 }
@@ -554,8 +594,10 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedUsersRoute: AuthenticatedUsersRoute,
   AuthenticatedWrapRoute: AuthenticatedWrapRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedOpsTabRoute: AuthenticatedOpsTabRoute,
   AuthenticatedSettingsTabRoute: AuthenticatedSettingsTabRoute,
   AuthenticatedVmIdRoute: AuthenticatedVmIdRoute,
+  AuthenticatedOpsIndexRoute: AuthenticatedOpsIndexRoute,
   AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
   AuthenticatedVmIndexRoute: AuthenticatedVmIndexRoute,
 }

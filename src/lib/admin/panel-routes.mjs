@@ -2019,6 +2019,30 @@ export function createPanelHandler(ctx) {
         return
       }
       // ---- Aggregated usage stats from request_logs (charts) ----
+      // GET /api/panel/ops/summary — 智能运营总览（门票/缓存/effort/流量）
+      if (req.method === 'GET' && p === '/api/panel/ops/summary') {
+        const u = new URL(req.url, 'http://x')
+        const hours = Number(u.searchParams.get('hours') || 24)
+        try {
+          const summary = requestLog.opsSummary({ hours })
+          const routing = ctx.routingConfig || {}
+          return json(res, 200, {
+            ok: true,
+            data: {
+              ...summary,
+              config: {
+                sticky_ttl_seconds: routing?.sticky?.ttl_seconds ?? null,
+                quota_limit_5h: routing?.openai_quota?.limit_5h ?? null,
+                quota_limit_7d: routing?.openai_quota?.limit_7d ?? null,
+                usage_probe_enabled: routing?.usage_probe?.enabled ?? null,
+              },
+            },
+          })
+        } catch (e) {
+          return json(res, 500, { ok: false, error: { message: String(e?.message || e) } })
+        }
+      }
+
       if (req.method === 'GET' && p === '/api/panel/request-logs/stats') {
         const u = new URL(req.url, 'http://x')
         const bucket = (u.searchParams.get('bucket') || 'day').toLowerCase() === 'hour' ? 'hour' : 'day'
