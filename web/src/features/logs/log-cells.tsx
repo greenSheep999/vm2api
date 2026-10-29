@@ -91,6 +91,14 @@ export function ThinkingEffortDisplay({ effort }: { effort: string | null }) {
   )
 }
 
+/** 行级账号档位：降智时不再显示票信息。 */
+function ROW_PROBE_STATE(row: UsageLogRow): 'healthy' | 'degraded' | 'other' {
+  const v = row.probeVerdict
+  if (v === 'healthy' || v === 'healthy_same') return 'healthy'
+  if (v === 'degraded' || v === 'route_changed') return 'degraded'
+  return 'other'
+}
+
 export function ModelDisplayWithRedirect({
   row,
   onRedirectClick,
@@ -134,39 +142,19 @@ export function ModelDisplayWithRedirect({
       {/* 第二排：门票 + 模型一致性 + 上游降档，有才显示 */}
       {hasChips ? (
         <div className='flex min-w-0 flex-wrap items-center gap-1'>
-          {ticket ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Badge
-                  variant='outline'
-                  className={cn(
-                    'shrink-0 cursor-help px-1 text-[10px] leading-tight',
-                    ticket === 'ok'
-                      ? 'border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-300'
-                      : 'border-rose-300 text-rose-700 dark:border-rose-700 dark:text-rose-300'
-                  )}
-                >
-                  {ticket === 'ok'
-                    ? `有票${row.turnStateLen ? ` · ${row.turnStateLen}字` : ''}`
-                    : ticket === 'absent'
-                      ? '无票'
-                      : '票异常'}
-                </Badge>
-              </TooltipTrigger>
-              <TooltipContent className='max-w-xs space-y-1 text-xs'>
-                <div className='font-medium'>
-                  {ticket === 'ok' ? '本次请求带回门票' : '本次请求没有门票'}
-                </div>
-                <div>
-                  门票: {ticket === 'ok' ? '正常' : ticket === 'absent' ? '上游未铸票' : '信封异常'}
-                  {row.turnStateBlocks ? ` · ${row.turnStateBlocks} 块` : ''}
-                </div>
-                <div className='text-primary-foreground/75'>
-                  说明：有票只代表上游铸了票；是否「满血」要看两发探针
-                  （裸打铸票 → 带票续接是否重铸），在「智能运营 → 门票」里测。
-                </div>
-              </TooltipContent>
-            </Tooltip>
+          {/* 票只在「满血 / 未探针」时显示：降智时这张票续不住，显示「有票」会误导。 */}
+          {ticket && ROW_PROBE_STATE(row) !== 'degraded' ? (
+            <Badge
+              variant='outline'
+              className={cn(
+                'shrink-0 px-1 text-[10px] leading-tight',
+                ticket === 'ok'
+                  ? 'border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-300'
+                  : 'border-rose-300 text-rose-700 dark:border-rose-700 dark:text-rose-300',
+              )}
+            >
+              {ticket === 'ok' ? `有票 · ${row.turnStateLen ?? 0}字` : ticket === 'absent' ? '无票' : '票异常'}
+            </Badge>
           ) : null}
           {row.probeVerdict ? (
             <Tooltip>
@@ -192,10 +180,10 @@ export function ModelDisplayWithRedirect({
                 </Badge>
               </TooltipTrigger>
               <TooltipContent className='max-w-xs space-y-1 text-xs'>
-                <div className='font-medium'>账号档位（两发探针结论）</div>
-                <div>最近探测: {row.probeAt ? String(row.probeAt).replace('T', ' ').slice(0, 19) : '—'}</div>
+                <div className='font-medium'>账号档位（两发探针）</div>
+                <div>探针时间: {row.probeAt ? String(row.probeAt).replace('T', ' ').slice(0, 19) : '—'}</div>
                 <div className='text-primary-foreground/75'>
-                  逐请求只能证明有没有票；满血/降智要带票续接一次才判得出来。
+                  有票只说明上游给了回合票；带票续接被重铸即降智。
                 </div>
               </TooltipContent>
             </Tooltip>

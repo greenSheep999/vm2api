@@ -49,8 +49,66 @@ function previewOpsAcl() {
     apply: 'serve' as const,
     configureServer(server: { middlewares: { use: (fn: unknown) => void } }) {
       server.middlewares.use(
-        (req: any, res: any, next: () => void) => {
+        async (req: any, res: any, next: () => void) => {
           const url = String(req.url || '')
+          // 单端口 mock 模式：访问 /?mock=1#/logs 会写入 cookie，
+          // 之后 usage-logs 接口返回 7 种状态的假数据（不额外开端口）。
+          if (url.includes('mock=1')) {
+            res.setHeader('set-cookie', 'kin_mock=1; Path=/; Max-Age=86400')
+            res.statusCode = 302
+            res.setHeader('location', '/#/logs')
+            res.end()
+            return
+          }
+          const mockMode = String(req.headers?.cookie || '').includes('kin_mock=1')
+          if (mockMode && req.method === 'GET' && url.startsWith('/api/panel/usage-logs')) {
+            // 拿真实响应做底板再改字段：手搓行容易缺字段、页面直接 500。
+            const upstream = process.env.VM2API_API_PROXY || 'https://vm2a.muxpay.xyz'
+            try {
+              const upstreamRes = await fetch(upstream + url, { headers: { authorization: String(req.headers?.authorization || '') } })
+              const json = (await upstreamRes.json()) as any
+              const logs = json?.data?.logs
+              if (Array.isArray(logs) && logs.length) {
+                const variants = [
+                  ['ok', 'healthy', 'gpt-6-astra', 'xhigh'],
+                  ['ok', 'degraded', 'gpt-6-astra', 'xhigh'],
+                  ['ok', null, 'gpt-6-astra', 'xhigh'],
+                  ['absent', 'degraded', 'gpt-6-astra', 'xhigh'],
+                  ['ok', 'route_changed', 'gpt-6-astra', 'xhigh'],
+                  ['ok', 'healthy', 'gpt-6.1-sol', 'xhigh'],
+                  ['ok', 'degraded', 'gpt-5.6-luna', 'xhigh'],
+                  ['ok', 'healthy', 'gpt-6-astra', 'low'],
+                  ['ok', 'healthy', 'gpt-6-astra-20260801', 'xhigh'],
+                ]
+                const base = logs.slice(0, 9)
+                const out = variants.map(([ticket, probe, upstreamModel, effort], i) => {
+                  const row = { ...(base[i] || base[0]) }
+                  row.id = `mock_${i}`
+                  row.vmId = `vm-mock-0${i + 1}`
+                  row.requestId = `mock_req_${i}`
+                  row.turnStateVerdict = ticket
+                  row.turnStateLen = ticket === 'ok' ? 780 : 0
+                  row.turnStateBlocks = ticket === 'ok' ? 33 : null
+                  row.probeVerdict = probe
+                  row.probeAt = probe ? new Date(Date.now() - 180_000).toISOString() : null
+                  row.reasoningEffort = effort
+                  row.upstreamReasoningEffort = effort === 'low' ? 'low' : effort
+                  row.upstreamResponseModel = upstreamModel
+                  row.requestedModel = 'gpt-6-astra'
+                  row.model = 'gpt-6-astra'
+                  return row
+                })
+                json.data.logs = out
+              }
+              const body = JSON.stringify(json)
+              res.statusCode = 200
+              res.setHeader('content-type', 'application/json')
+              res.end(body)
+              return
+            } catch {
+              // 拿不到底板就退回真实数据
+            }
+          }
           const hitMe = req.method === 'GET' && url.startsWith('/api/panel/me')
           const hitSummary = req.method === 'GET' && url.startsWith('/api/panel/ops/summary')
           const hitHarvest = url.startsWith('/api/panel/ops/harvest')

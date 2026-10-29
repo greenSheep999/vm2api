@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Activity, AlertTriangle, Boxes, Brain, Handshake, Loader2, Play, TicketCheck } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -59,16 +59,66 @@ export type HarvestSnapshot = {
 
 const CARD = 'rounded-lg border bg-card p-4'
 
+function fmtAgo(iso?: string | null) {
+  if (!iso) return '—'
+  const ms = Date.now() - Date.parse(iso)
+  if (!Number.isFinite(ms)) return '—'
+  if (ms < 0) return '刚刚'
+  const sec = Math.round(ms / 1000)
+  if (sec < 60) return `${sec} 秒前`
+  const min = Math.round(sec / 60)
+  if (min < 60) return `${min} 分钟前`
+  return `${Math.round(min / 60)} 小时前`
+}
+
+function fmtLeft(iso?: string | null) {
+  if (!iso) return '有效期 —'
+  const ms = Date.parse(iso) - Date.now()
+  if (!Number.isFinite(ms)) return '有效期 —'
+  if (ms <= 0) return '已过期'
+  const min = Math.floor(ms / 60_000)
+  return min >= 60 ? `剩 ${Math.floor(min / 60)} 小时 ${min % 60} 分` : `剩 ${min} 分钟`
+}
+
 function fmtClock(v?: string | null) {
   if (!v) return '—'
   return v.replace('T', ' ').replace('Z', '').slice(11, 19)
 }
 
+type TicketState = 'valid' | 'expiring' | 'expired' | 'missing' | 'error' | 'unknown'
+
+/**
+ * 票的生命周期状态。卡片颜色只跟着这个走：
+ *   有效（绿）→ 即将过期（黄）→ 已过期（灰，无色）→ 无票（灰）→ 异常（红）
+ */
+function ticketState(t: HarvestTicket): TicketState {
+  if (!t.verdict) return 'unknown'
+  if (t.verdict === 'absent') return 'missing'
+  if (t.verdict !== 'ok') return 'error'
+  const exp = t.expires_at ? Date.parse(t.expires_at) : NaN
+  if (!Number.isFinite(exp)) return 'valid'
+  const left = exp - Date.now()
+  if (left <= 0) return 'expired'
+  if (left < 5 * 60_000) return 'expiring'
+  return 'valid'
+}
+
 function chipClass(t: HarvestTicket) {
-  if (t.verdict === 'ok') return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300'
-  if (t.verdict === 'absent') return 'bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300'
-  if (!t.verdict) return 'bg-muted text-muted-foreground'
-  return 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300'
+  switch (ticketState(t)) {
+    case 'valid':
+      return 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300'
+    case 'expiring':
+      return 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300'
+    case 'expired':
+      // 掉了就没有颜色：中性灰，不再显示成「有票」的绿色
+      return 'bg-muted/60 text-muted-foreground'
+    case 'missing':
+      return 'bg-muted text-muted-foreground'
+    case 'error':
+      return 'bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-300'
+    default:
+      return 'bg-muted text-muted-foreground'
+  }
 }
 
 function remainingText(t: HarvestTicket) {
@@ -76,8 +126,8 @@ function remainingText(t: HarvestTicket) {
   const ms = Date.parse(t.expires_at) - Date.now()
   if (!Number.isFinite(ms)) return '有效期 —'
   if (ms <= 0) return '已过期'
-  const m = Math.floor(ms / 60000)
-  return `剩余 ${m}m`
+  const m = Math.floor(ms / 60_000)
+  return m >= 60 ? `剩余 ${Math.floor(m / 60)}h${m % 60}m` : `剩余 ${m}m`
 }
 
 export function HarvestPane() {
@@ -90,11 +140,18 @@ export function HarvestPane() {
   const [borrowResults, setBorrowResults] = useState<Record<string, string>>({})
   const [probeResults, setProbeResults] = useState<Record<string, { verdict: string; shoot: any }>>({})
   const [filter, setFilter] = useState<'all' | 'ticket' | 'probe' | 'select' | 'candy'>('all')
+  // 相对时间心跳：让「N 秒前 / 剩余 N 分钟」自己走动，不用等轮询。
+  const [, forceTick] = useState(0)
+  useEffect(() => {
+    const timer = setInterval(() => forceTick((n) => n + 1), 1000)
+    return () => clearInterval(timer)
+  }, [])
 
   const snap = useQuery({
     queryKey: ['ops-harvest'],
     queryFn: () => api<HarvestSnapshot>('/api/panel/ops/harvest'),
-    refetchInterval: 15_000,
+    // 打票/探测进行中要能实时看到状态推进，空闲时也要跟得上票的有效期变化。
+    refetchInterval: running || probing || borrowing || checking ? 2000 : 5000,
   })
 
   const toggle = useMutation({
@@ -410,8 +467,31 @@ export function HarvestPane() {
                       <div className='flex flex-wrap items-center justify-between gap-2'>
                         <span className='flex flex-wrap items-center gap-2 font-mono font-medium'>
                           {t.model}
-                          <span className='rounded bg-black/5 px-1 text-[10px] dark:bg-white/10'>
-                            {t.verdict === 'ok' ? '有票' : t.verdict === 'absent' ? '无票' : '票异常'}
+                          {/* 主状态 = 账号档位（票能不能续）；票本身几乎每次都有，不作为主状态。 */}
+                          <span
+                            className={cn(
+                              'rounded px-1 text-[10px]',
+                              t.probe_verdict === 'healthy' || t.probe_verdict === 'healthy_same'
+                                ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                                : t.probe_verdict === 'degraded' || t.probe_verdict === 'route_changed'
+                                  ? 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
+                                  : 'bg-black/5 text-muted-foreground dark:bg-white/10',
+                            )}
+                          >
+                            {t.probe_verdict === 'healthy' || t.probe_verdict === 'healthy_same'
+                              ? '满血'
+                              : t.probe_verdict === 'degraded'
+                                ? '降智'
+                                : t.probe_verdict === 'route_changed'
+                                  ? '路由漂移'
+                                  : '未探针'}
+                          </span>
+                          <span className='text-[10px] text-muted-foreground'>
+                            {t.verdict === 'ok'
+                              ? `票 ${t.len ?? 0} 字 · ${remainingText(t)}`
+                              : t.verdict === 'absent'
+                                ? '上游未铸票'
+                                : '票异常'}
                           </span>
                           {t.probe_verdict ? (
                             <span
@@ -523,7 +603,10 @@ export function HarvestPane() {
                         <span>长度 {t.len ?? '—'}</span>
                         <span>{remainingText(t)}</span>
                         <span>签发 {t.issued_at ? fmtClock(t.issued_at) : '—'}</span>
-                        <span>采集 {t.checked_at ? fmtClock(t.checked_at) : '—'}</span>
+                        <span>
+                          {t.checked_at ? `采集 ${fmtAgo(t.checked_at)}` : '尚未采集'}
+                          {t.expires_at ? ` · ${fmtLeft(t.expires_at)}` : ''}
+                        </span>
                         <span>HTTP {t.http_status ?? '—'}</span>
                         {(() => {
                           const candy = (data.events || []).find(

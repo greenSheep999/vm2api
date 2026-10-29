@@ -91,6 +91,19 @@ const CANDY_PROMPT =
   '圆形：苹果7 桃子9 西瓜8；五角星：苹果7 桃子6 西瓜4。' +
   '预先定好摸出个数，最少摸多少个才能保证同时拥有不同形状的苹果味和桃子味？只输出最终数字。'
 const DEFAULT_MODEL = 'gpt-6-astra'
+/** 一个槽位可以对多个模型分别打票：面板默认把这几个都列出来。 */
+const DEFAULT_MODELS = Object.freeze([
+  'gpt-6-astra',
+  'gpt-6.1-sol',
+  'gpt-6-sol',
+  'gpt-5.6-sol',
+  'gpt-5.6-luna',
+])
+
+function modelList(policy) {
+  const list = Array.isArray(policy?.models) && policy.models.length ? policy.models : DEFAULT_MODELS
+  return [...new Set(list.map((m) => String(m).trim()).filter(Boolean))]
+}
 
 function nowIso() {
   return new Date().toISOString()
@@ -216,7 +229,7 @@ export async function probeSweep({ projectRoot, policy = {}, setSchedule = null 
   if (!policy?.enabled || (probeEvery <= 0 && candyEvery <= 0 && pelicanEvery <= 0)) {
     return { skipped: 'disabled' }
   }
-  const models = Array.isArray(policy.models) && policy.models.length ? policy.models : [DEFAULT_MODEL]
+  const models = modelList(policy)
   const flags = readAccountFlags()
   const snaps = readSnapshots()
   const active = readRecentActiveVms(projectRoot)
@@ -225,6 +238,7 @@ export async function probeSweep({ projectRoot, policy = {}, setSchedule = null 
   for (const vm of (listVms(projectRoot) || [])) {
     const vmId = vm?.id
     if (!vmId || !isCodexVm(vm)) continue
+    if (vm.schedulable === false) continue // 被停调度（待重新登录/手动停用）不参与定时打票
     if (flags.get(vmId) === true) continue
     for (const model of models) {
       const snap = snaps.get(`${vmId}\u0000${model}`) || {}
@@ -306,6 +320,9 @@ export function harvestOverview(projectRoot) {
   const vms = listVms(projectRoot) || []
   const accounts = vms
     .filter((vm) => vm?.id && isCodexVm(vm))
+    // 已被停调度（如 oauth 401 需要重新登录）的账号不该出现在打票列表里，
+    // 否则会显示成「还能打票」，实际打也打不出来。
+    .filter((vm) => vm.schedulable !== false)
     .map((vm) => {
       const models = []
       for (const [key, snap] of snaps) {
@@ -327,8 +344,11 @@ export function harvestOverview(projectRoot) {
           probe_detail: snap.probe_detail || null,
         })
       }
-      if (models.length === 0) {
-        models.push({ model: DEFAULT_MODEL, verdict: null, blocks: null, len: null })
+      // 没采集过的模型也要列出来，否则面板只显示「打过的那一个」。
+      for (const model of DEFAULT_MODELS) {
+        if (!models.some((item) => item.model === model)) {
+          models.push({ model, verdict: null, blocks: null, len: null, probe_verdict: null, probe_at: null })
+        }
       }
       models.sort((a, b) => String(a.model).localeCompare(String(b.model)))
       return {
