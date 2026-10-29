@@ -321,3 +321,50 @@ export async function runSingleCheck({ projectRoot, scopeType = 'slot', scopeIds
 export function listQuestionsForApi() {
   return listQuestions()
 }
+
+
+/**
+ * 结果视图：把检测记录按「Key」聚合，并带上题目类型，供结果页筛选。
+ * Key 与槽位的对应关系来自 api_keys.allowed_vms。
+ */
+export function listResults({ kind = null, limit = 200 } = {}) {
+  let rows = []
+  try {
+    rows = db()
+      .prepare(
+        `SELECT r.*, q.kind AS question_kind, q.title AS question_title
+           FROM iq_task_runs r
+           LEFT JOIN iq_questions q ON q.id = r.question_id
+          ORDER BY r.started_at DESC LIMIT ?`,
+      )
+      .all(Math.max(1, Math.min(1000, Number(limit) || 200)))
+  } catch {
+    return { items: [], keys: [] }
+  }
+
+  // 槽位 → 可调用它的 Key（一个槽可以属于多个 Key）
+  const keyByVm = new Map()
+  const keyList = []
+  try {
+    const keys = db().prepare('SELECT id, name, allowed_vms FROM api_keys').all()
+    for (const k of keys) {
+      keyList.push({ id: k.id, name: k.name })
+      let allow = []
+      try {
+        allow = JSON.parse(k.allowed_vms || '[]')
+      } catch {}
+      for (const vmId of allow) {
+        if (!keyByVm.has(vmId)) keyByVm.set(vmId, [])
+        keyByVm.get(vmId).push({ id: k.id, name: k.name })
+      }
+    }
+  } catch {}
+
+  const items = rows
+    .filter((row) => (kind ? row.question_kind === kind || row.question_id === kind : true))
+    .map((row) => ({
+      ...row,
+      keys: keyByVm.get(row.vm_id) || [],
+    }))
+  return { items, keys: keyList, keyByVm: Object.fromEntries(keyByVm) }
+}

@@ -54,6 +54,67 @@ function previewOpsAcl() {
           const hitMe = req.method === 'GET' && url.startsWith('/api/panel/me')
           const hitSummary = req.method === 'GET' && url.startsWith('/api/panel/ops/summary')
           const hitHarvest = url.startsWith('/api/panel/ops/harvest')
+          const hitIq = url.startsWith('/api/panel/ops/iq')
+
+          // 降智检测桩：题库 / 任务 / 记录 / 结果（后端接口未上线时让界面可验）。
+          if (hitIq && req.method === 'GET') {
+            const now = Date.now()
+            const qs = [
+              { id: 'candy', title: '糖果计数', kind: 'numeric', prompt: '…糖果题原文…', judge_rule: 'numeric_pass', expected: '21', auto_support: 1, builtin: 1 },
+              { id: 'poker', title: '扑克翻牌', kind: 'numeric', prompt: '…扑克题原文…', judge_rule: 'record_only', expected: null, auto_support: 0, builtin: 1 },
+              { id: 'pelican-bike', title: '鹈鹕骑自行车', kind: 'image', prompt: '…SVG 动画…', judge_rule: 'structure', expected: null, auto_support: 0, builtin: 1 },
+            ]
+            let data: any = { items: qs }
+            if (url.includes('/iq/tasks')) {
+              data = {
+                items: [
+                  { id: 'iq_demo1', name: '门票探针', kind: 'probe', interval_sec: 180, model: null, enabled: 1, only_healthy: 0, last_run_at: new Date(now - 120000).toISOString(), next_run_at: new Date(now + 60000).toISOString(), last_verdict: 'degraded', run_count: 128, fail_count: 96 },
+                  { id: 'iq_demo2', name: '糖果题', kind: 'candy', interval_sec: 900, model: null, enabled: 1, only_healthy: 1, last_run_at: new Date(now - 420000).toISOString(), next_run_at: new Date(now + 480000).toISOString(), last_verdict: 'pass', run_count: 42, fail_count: 3 },
+                  { id: 'iq_demo3', name: '鹈鹕结构', kind: 'pelican', interval_sec: 1800, model: null, enabled: 0, only_healthy: 1, last_run_at: null, next_run_at: null, last_verdict: null, run_count: 0, fail_count: 0 },
+                ],
+                latest: [
+                  { vm_id: 'vm-13', kind: 'probe', verdict: 'healthy', started_at: new Date(now - 90000).toISOString() },
+                  { vm_id: 'vm-gpt-02', kind: 'probe', verdict: 'degraded', started_at: new Date(now - 100000).toISOString() },
+                ],
+              }
+            } else if (url.includes('/iq/runs')) {
+              data = {
+                items: [
+                  { id: 'r1', task_id: 'single', vm_id: 'vm-13', model: 'gpt-6-astra', verdict: 'pass', answer: 21, expected: 21, question_id: 'candy', source: 'single', started_at: new Date(now - 90000).toISOString(), duration_ms: 4200 },
+                  { id: 'r2', task_id: 'iq_demo2', vm_id: 'vm-gpt-02', model: 'gpt-6-astra', verdict: 'fail', answer: 29, expected: 21, question_id: 'candy', source: 'task', started_at: new Date(now - 300000).toISOString(), duration_ms: 6100 },
+                  { id: 'r3', task_id: 'iq_demo1', vm_id: 'vm-13', model: 'gpt-6-astra', verdict: 'healthy', answer: null, expected: null, question_id: 'probe', source: 'task', started_at: new Date(now - 600000).toISOString(), duration_ms: 2100 },
+                ],
+              }
+            } else if (url.includes('/iq/results')) {
+              const mk = (id: string, vm: string, kind: string, verdict: string, answer: number | null, expected: number | null, min: number) => ({
+                id, vm_id: vm, model: 'gpt-6-astra', verdict, answer, expected,
+                question_id: kind, question_kind: kind,
+                question_title: kind === 'candy' ? '糖果计数' : kind === 'probe' ? '门票探针' : '鹈鹕骑自行车',
+                source: min % 2 ? 'task' : 'single',
+                started_at: new Date(now - min * 60000).toISOString(),
+                duration_ms: 2000 + (min % 7) * 400,
+                keys: vm === 'vm-13' ? [{ id: 'key_f9aaa7d2dc56', name: 'new-api-plus-self' }] : [{ id: 'key_aaa', name: 'new-api-self' }],
+              })
+              data = {
+                items: [
+                  mk('a1', 'vm-13', 'candy', 'pass', 21, 21, 3),
+                  mk('a2', 'vm-13', 'probe', 'healthy', null, null, 2),
+                  mk('a3', 'vm-gpt-02', 'candy', 'fail', 29, 21, 5),
+                  mk('a4', 'vm-gpt-02', 'probe', 'degraded', null, null, 4),
+                  mk('a5', 'vm-gpt-05', 'candy', 'fail', 29, 21, 18),
+                  mk('a6', 'vm-13', 'pelican', 'structure_ok', null, null, 22),
+                ],
+                keys: [
+                  { id: 'key_f9aaa7d2dc56', name: 'new-api-plus-self' },
+                  { id: 'key_aaa', name: 'new-api-self' },
+                ],
+              }
+            }
+            res.statusCode = 200
+            res.setHeader('content-type', 'application/json')
+            res.end(JSON.stringify({ ok: true, data, items: data.items }))
+            return
+          }
 
           // 打票面板桩：后端接口未上线时，用内存态把页面与交互跑通。
           if (hitHarvest) {
@@ -125,7 +186,31 @@ function previewOpsAcl() {
               try { body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}') } catch {}
               const id = String(body.vm_id || '')
               let payload: any = { ok: true, data: {} }
-              if (url.includes('/ops/iq/tasks') && req.method === 'GET') {
+              if (url.includes('/ops/iq/results') && req.method === 'GET') {
+                const now = Date.now()
+                const mk = (id: string, vm: string, kind: string, verdict: string, answer: number | null, expected: number | null, min: number) => ({
+                  id, vm_id: vm, model: 'gpt-6-astra', verdict, answer, expected,
+                  question_id: kind, question_kind: kind,
+                  question_title: kind === 'candy' ? '糖果计数' : kind === 'probe' ? '门票探针' : '鹈鹕骑自行车',
+                  source: min % 2 ? 'task' : 'single', started_at: new Date(now - min * 60000).toISOString(),
+                  duration_ms: 2000 + (min % 7) * 400,
+                  keys: vm === 'vm-13' ? [{ id: 'key_f9aaa7d2dc56', name: 'new-api-plus-self' }] : [{ id: 'key_aaa', name: 'new-api-self' }],
+                })
+                payload.data = {
+                  items: [
+                    mk('a1', 'vm-13', 'candy', 'pass', 21, 21, 3),
+                    mk('a2', 'vm-13', 'probe', 'healthy', null, null, 2),
+                    mk('a3', 'vm-gpt-02', 'candy', 'fail', 29, 21, 5),
+                    mk('a4', 'vm-gpt-02', 'probe', 'degraded', null, null, 4),
+                    mk('a5', 'vm-gpt-05', 'candy', 'fail', 29, 21, 18),
+                    mk('a6', 'vm-13', 'pelican', 'structure_ok', null, null, 22),
+                  ],
+                  keys: [
+                    { id: 'key_f9aaa7d2dc56', name: 'new-api-plus-self' },
+                    { id: 'key_aaa', name: 'new-api-self' },
+                  ],
+                }
+              } else if (url.includes('/ops/iq/tasks') && req.method === 'GET') {
                 const now = Date.now()
                 payload.data = {
                   items: [

@@ -109,4 +109,19 @@ export type IqRun = {
   ok: number
   started_at: string
   duration_ms: number | null
+  source?: string | null
+  question_id?: string | null
+  effort?: string | null
+  tokens?: number | null
+}
+
+export type IqQuestion = {
+  id: string
+  title: string
+  kind: string
+  prompt: string
+  judge_rule: string
+  expected: string | null
+  auto_support: number
+  builtin: number
 }

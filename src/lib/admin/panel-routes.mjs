@@ -2142,6 +2142,11 @@ export function createPanelHandler(ctx) {
         const { deleteTask } = await import('./iq-tasks.mjs')
         return json(res, 200, { ok: deleteTask(id) })
       }
+      if (p === '/api/panel/ops/iq/results' && req.method === 'GET') {
+        const url = new URL(req.url, 'http://localhost')
+        const { listResults } = await import('./iq-tasks.mjs')
+        return json(res, 200, { ok: true, data: listResults({ kind: url.searchParams.get('kind'), limit: Number(url.searchParams.get('limit')) || 200 }) })
+      }
       if (p === '/api/panel/ops/iq/runs' && req.method === 'GET') {
         const url = new URL(req.url, 'http://localhost')
         const { listRuns } = await import('./iq-tasks.mjs')
