@@ -269,7 +269,13 @@ async function mintShot({ edgeIp, proxyUrl, token, model, sessionId, state, prom
         })
         res.on('end', () => {
           const modelEcho = /"model"\s*:\s*"([^"]+)"/.exec(peek)?.[1] || null
-          resolve({ status: res.statusCode, state: next, model: modelEcho, preview: peek })
+          const rawCookies = [].concat(res.headers['set-cookie'] || [])
+          // Cloudflare 路由对：__cflb(机房) + __oailb(网关)，sub 用它们判断路由是否漂移。
+          const route = rawCookies
+            .map((c) => String(c).split(';')[0])
+            .filter((c) => c.startsWith('__cflb=') || c.startsWith('__oailb='))
+            .sort()
+          resolve({ status: res.statusCode, state: next, model: modelEcho, preview: peek, route })
         })
       },
     )
@@ -304,9 +310,16 @@ export async function runTicketProbe({ projectRoot, vmId, model, edgeIp = null, 
     : null
 
   let verdict
+  const routeChanged =
+    Boolean(shot2) &&
+    shot1.route?.length > 0 &&
+    shot2.route?.length > 0 &&
+    shot1.route.join('|') !== shot2.route.join('|')
   if (!shot1.state) verdict = 'no_ticket'
-  else if (!shot2 || !shot2.state) verdict = 'healthy'
-  else if (shot2.state !== shot1.state) verdict = 'degraded'
+  else if (!shot2) verdict = 'inconclusive'
+  else if (shot2.state && shot2.state !== shot1.state) verdict = 'degraded'
+  else if (routeChanged) verdict = 'route_changed'
+  else if (!shot2.state) verdict = 'healthy'
   else verdict = 'healthy_same'
 
   try {
@@ -379,7 +392,16 @@ export async function runTicketProbe({ projectRoot, vmId, model, edgeIp = null, 
     verdict,
     candy,
     shot1: { http: shot1.status, ticket_len: shot1.state.length, model: shot1.model },
-    shot2: shot2 ? { http: shot2.status, new_ticket: !!shot2.state, ticket_len: shot2.state.length, model: shot2.model } : null,
+    shot2: shot2
+      ? {
+          http: shot2.status,
+          new_ticket: !!shot2.state,
+          ticket_len: shot2.state.length,
+          model: shot2.model,
+          route_changed: routeChanged,
+        }
+      : null,
+    route: { shot1: shot1.route || [], shot2: shot2?.route || [] },
     edge_ip: edgeIp,
   }
 }
