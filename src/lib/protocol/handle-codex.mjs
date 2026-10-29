@@ -75,8 +75,18 @@ import {
 import { clientIp } from '../pool/sticky-router.mjs'
 
 // Official Codex client headers for ChatGPT Responses. Auth is attached by the kernel.
+// 上游按客户端身份决定要不要铸回合门票（x-codex-turn-state）。
+// 缺 originator/version/OpenAI-Beta 时，上游把请求当成非 Codex 客户端、
+// 不铸票，随后按低档服务 —— 这正是「降智商」的机制。
+const CODEX_IDENTITY_DEFAULTS = Object.freeze({
+  originator: 'codex_cli_rs',
+  version: '0.160.0',
+  'openai-beta': 'responses=experimental',
+})
+
 const CODEX_KERNEL_HEADER_ALLOWLIST = Object.freeze([
   'originator',
+  'version',
   'openai-beta',
   'session-id',
   'thread-id',
@@ -92,6 +102,9 @@ const CODEX_KERNEL_HEADER_ALLOWLIST = Object.freeze([
   'x-openai-subagent',
 ])
 
+/** 仅供单测：验证身份头补齐逻辑。 */
+export const __codexKernelHeaders = codexKernelHeaders
+
 function headerString(headers, name) {
   const value = headers?.[name]
   return typeof value === 'string' && value.trim() ? value : ''
@@ -105,6 +118,11 @@ function codexKernelHeaders(reqHeaders = {}, body = {}, session = null) {
   }
   if (typeof session?.session_id === 'string' && session.session_id) {
     headers['session-id'] = session.session_id
+  }
+  // 客户端（或中间的 new-api）可能根本不发这三个头。缺了就补默认值，
+  // 否则上游不铸票、请求被降档。
+  for (const [name, value] of Object.entries(CODEX_IDENTITY_DEFAULTS)) {
+    if (!headers[name]) headers[name] = value
   }
   const model = typeof body?.model === 'string' ? body.model.trim() : ''
   if (model) {
