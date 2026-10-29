@@ -521,6 +521,8 @@ export class UsageLogsRepo {
       .all(...params, n, off)
       .map(fromRow)
       .map(enrichLogRow)
+    // 账号档位（降智/满血）是账号级结论，来自检测记录，不能从单次请求推断。
+    attachProbeVerdict(this.db, items)
     return { items, total }
   }
 
@@ -1795,3 +1797,34 @@ export class UsageLogsRepo {
 
 /** Transitional alias while callers migrate to the sub2api name. */
 export { UsageLogsRepo as RequestLogsRepo }
+
+
+/**
+ * 给日志行补「账号最新档位」：取该槽位最近一次探针结论。
+ * 单次请求只能证明有没有票；满血/降智必须靠两发探针，所以从检测记录里取。
+ */
+function attachProbeVerdict(db, items) {
+  if (!Array.isArray(items) || !items.length) return
+  const ids = [...new Set(items.map((row) => row.vmId).filter(Boolean))]
+  if (!ids.length) return
+  const latest = new Map()
+  try {
+    const placeholders = ids.map(() => '?').join(',')
+    const rows = db
+      .prepare(
+        `SELECT vm_id, verdict, started_at FROM (
+           SELECT vm_id, verdict, started_at,
+                  ROW_NUMBER() OVER (PARTITION BY vm_id ORDER BY started_at DESC) AS rn
+             FROM iq_task_runs
+            WHERE vm_id IN (${placeholders}) AND question_id = 'probe'
+         ) WHERE rn = 1`,
+      )
+      .all(...ids)
+    for (const row of rows) latest.set(row.vm_id, row)
+  } catch {}
+  for (const row of items) {
+    const hit = latest.get(row.vmId)
+    row.probeVerdict = hit?.verdict || null
+    row.probeAt = hit?.started_at || null
+  }
+}

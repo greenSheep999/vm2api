@@ -119,6 +119,8 @@ export type UsageLogRow = {
   upstreamResponseModel: string | null
   upstreamReasoningEffort: string | null
   turnStateVerdict: 'ok' | 'short' | 'tall' | 'malformed' | 'absent' | null
+  probeVerdict?: string | null
+  probeAt?: string | null
   turnStateBlocks: number | null
   turnStateLen: number | null
   turnStateIssuedAt: string | null

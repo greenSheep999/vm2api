@@ -168,6 +168,38 @@ export function ModelDisplayWithRedirect({
               </TooltipContent>
             </Tooltip>
           ) : null}
+          {row.probeVerdict ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant='outline'
+                  className={cn(
+                    'shrink-0 cursor-help px-1 text-[10px] leading-tight',
+                    row.probeVerdict === 'healthy' || row.probeVerdict === 'healthy_same'
+                      ? 'border-emerald-300 text-emerald-700 dark:border-emerald-700 dark:text-emerald-300'
+                      : row.probeVerdict === 'degraded' || row.probeVerdict === 'route_changed'
+                        ? 'border-rose-300 text-rose-700 dark:border-rose-700 dark:text-rose-300'
+                        : 'border-amber-300 text-amber-700 dark:border-amber-700 dark:text-amber-300',
+                  )}
+                >
+                  {row.probeVerdict === 'healthy' || row.probeVerdict === 'healthy_same'
+                    ? '满血'
+                    : row.probeVerdict === 'degraded'
+                      ? '降智'
+                      : row.probeVerdict === 'route_changed'
+                        ? '路由漂移'
+                        : '无票'}
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent className='max-w-xs space-y-1 text-xs'>
+                <div className='font-medium'>账号档位（两发探针结论）</div>
+                <div>最近探测: {row.probeAt ? String(row.probeAt).replace('T', ' ').slice(0, 19) : '—'}</div>
+                <div className='text-primary-foreground/75'>
+                  逐请求只能证明有没有票；满血/降智要带票续接一次才判得出来。
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          ) : null}
           {audit.secondaryActualModel ? (
             <Tooltip>
               <TooltipTrigger asChild>
