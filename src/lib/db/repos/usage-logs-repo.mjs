@@ -941,8 +941,9 @@ export class UsageLogsRepo {
       .all()
     const ticketSlots = db
       .prepare(
-        `SELECT vm_id, COALESCE(turn_state_verdict,'uncollected') AS verdict, COUNT(*) AS n
-         FROM usage_logs WHERE ${W} GROUP BY 1,2 ORDER BY n DESC LIMIT 40`,
+        `SELECT vm_id, turn_state_verdict AS verdict, COUNT(*) AS n
+         FROM usage_logs WHERE ${W} AND turn_state_verdict IS NOT NULL
+         GROUP BY 1,2 ORDER BY n DESC LIMIT 40`,
       )
       .all()
     const raw = db

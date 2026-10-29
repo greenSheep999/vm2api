@@ -167,7 +167,11 @@ import { parseAllowedModelsPatch } from '../pool/slot-model-gate.mjs'
 import { parseScheduleLevelInput, manualScheduleLevelOf } from '../pool/credential-weight.mjs'
 import { parseActiveHoursInput } from '../pool/active-hours.mjs'
 import { parseVmQuotaOverride } from '../pool/vm-quota-override.mjs'
-import { validateOpenAIQuotaPatch, normalizeOpenAIQuotaPolicy } from '../pool/openai-quota-policy.mjs'
+import {
+  OPENAI_QUOTA_DEFAULTS,
+  normalizeOpenAIQuotaPolicy,
+  validateOpenAIQuotaPatch,
+} from '../pool/openai-quota-policy.mjs'
 import { validateInferenceWebsocketPatch } from '../protocol/codex-route.mjs'
 import {
   normalizeInferenceConfig,
@@ -2031,10 +2035,14 @@ export function createPanelHandler(ctx) {
             data: {
               ...summary,
               config: {
-                sticky_ttl_seconds: routing?.sticky?.ttl_seconds ?? null,
-                quota_limit_5h: routing?.openai_quota?.limit_5h ?? null,
-                quota_limit_7d: routing?.openai_quota?.limit_7d ?? null,
-                usage_probe_enabled: routing?.usage_probe?.enabled ?? null,
+                // routing.json 没写就回落代码默认值，页面要看到「实际生效」的闸线。
+                sticky_ttl_seconds: routing?.sticky?.ttl_seconds ?? 3600,
+                quota_limit_5h:
+                  routing?.openai_quota?.limit_5h ?? OPENAI_QUOTA_DEFAULTS.limit_5h,
+                quota_limit_7d:
+                  routing?.openai_quota?.limit_7d ?? OPENAI_QUOTA_DEFAULTS.limit_7d,
+                usage_probe_enabled: routing?.usage_probe?.enabled ?? true,
+                usage_probe_configured: routing?.usage_probe?.enabled !== undefined,
               },
             },
           })
