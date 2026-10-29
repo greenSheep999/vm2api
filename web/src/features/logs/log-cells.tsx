@@ -147,20 +147,23 @@ export function ModelDisplayWithRedirect({
                   )}
                 >
                   {ticket === 'ok'
-                    ? `满血${row.turnStateLen ? ` · ${row.turnStateLen}字` : ''}`
+                    ? `有票${row.turnStateLen ? ` · ${row.turnStateLen}字` : ''}`
                     : ticket === 'absent'
-                      ? '降智 · 无票'
+                      ? '无票'
                       : '票异常'}
                 </Badge>
               </TooltipTrigger>
               <TooltipContent className='max-w-xs space-y-1 text-xs'>
-                <div className='font-medium'>{ticket === 'ok' ? '账号满血' : '账号降智'}</div>
+                <div className='font-medium'>
+                  {ticket === 'ok' ? '本次请求带回门票' : '本次请求没有门票'}
+                </div>
                 <div>
                   门票: {ticket === 'ok' ? '正常' : ticket === 'absent' ? '上游未铸票' : '信封异常'}
                   {row.turnStateBlocks ? ` · ${row.turnStateBlocks} 块` : ''}
                 </div>
                 <div className='text-primary-foreground/75'>
-                  口径：两发探针（裸打铸票 → 带票续接是否重铸）。
+                  说明：有票只代表上游铸了票；是否「满血」要看两发探针
+                  （裸打铸票 → 带票续接是否重铸），在「智能运营 → 门票」里测。
                 </div>
               </TooltipContent>
             </Tooltip>

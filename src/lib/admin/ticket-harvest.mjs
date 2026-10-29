@@ -10,6 +10,7 @@
  * 也不会绕开现有的鉴权、代理绑定与日志。
  */
 import https from 'node:https'
+import dns from 'node:dns/promises'
 import { getDb } from '../db/database.mjs'
 import { getVm, listVms } from '../vm/vm-registry.mjs'
 import { readCodexAccounts } from '../vm/codex-slot.mjs'
@@ -17,6 +18,20 @@ import { createSocksProxyAgent } from '../vm/proxy-agent.mjs'
 import { judgeTurnState, expectedTurnStateBlocks } from '../protocol/turn-state.mjs'
 
 const UPSTREAM_URL = 'https://chatgpt.com/backend-api/codex/responses'
+
+// 住宅代理不支持 IPv6，chatgpt.com 的 AAAA 会先被解析导致 SOCKS HostUnreachable；
+// 这里自己解析 A 记录并缓存。
+let cachedV4 = { at: 0, ip: '' }
+async function upstreamIPv4() {
+  if (cachedV4.ip && Date.now() - cachedV4.at < 300_000) return cachedV4.ip
+  try {
+    const list = await dns.resolve4('chatgpt.com')
+    cachedV4 = { at: Date.now(), ip: list[0] || '' }
+    return cachedV4.ip
+  } catch {
+    return ''
+  }
+}
 const UPSTREAM_HOST = 'chatgpt.com'
 
 const TINY_PROMPT = '只回复两个字符：OK'
@@ -205,7 +220,8 @@ function latestTicketRow(vmId, model, sinceIso) {
  * 身份头必须齐全（originator/version/OpenAI-Beta）——实测缺任意一个上游都不铸票，
  * 这也正是 worker 白名单那个 bug 的影响面。
  */
-function mintShot({ edgeIp, proxyUrl, token, model, sessionId, state, prompt = null }) {
+async function mintShot({ edgeIp, proxyUrl, token, model, sessionId, state, prompt = null }) {
+  const dialIp = edgeIp || (await upstreamIPv4()) || UPSTREAM_HOST
   return new Promise((resolve) => {
     const payload = JSON.stringify({
       model,
@@ -232,7 +248,8 @@ function mintShot({ edgeIp, proxyUrl, token, model, sessionId, state, prompt = n
     if (state) headers['x-codex-turn-state'] = state
     const req = https.request(
       {
-        host: edgeIp || UPSTREAM_HOST,
+        host: dialIp,
+        servername: UPSTREAM_HOST,
         port: 443,
         method: 'POST',
         path: '/backend-api/codex/responses',
