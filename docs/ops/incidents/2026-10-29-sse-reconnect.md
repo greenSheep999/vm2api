@@ -36,6 +36,26 @@ new-api 的 `eof` 来自「没收到 `[DONE]`」。官方 Responses API 的 SSE 
 3. **gs.25 / gs.27**：出站身份归一为 Linux CLI（`codex_exec/0.165.0 (Linux …; x86_64)`），
    与 `originator`、`version`、`turn-metadata` 自洽——槽位是 Debian，不能伪装成 Mac 桌面端。
 
+## 第二层根因（gs.31）
+
+`[DONE]` 修好后仍有客户端重连。查 new-api 的失败行：
+
+```
+status_code=503  Service temporarily unavailable  耗时 5.0s
+```
+
+对应我们库里同一条请求：`error_message=missing_response_completed`，
+`upstream_status=200`，响应体只到 `response.created` 就结束——上游在发出元事件后立刻断开。
+而我们已经把这个元事件转发给了客户端，`hopEmitted=true`，无法换号重试，
+客户端只能重连。两小时内出现 16 次。
+
+修复：**首字之前不转发**。内容事件（`output_text` / `reasoning` / `output_item` /
+`function_call` / `completed`）到达前，所有行先缓冲；若此时上游断开，直接返回
+`committed=false` + `transportError=true`，上层静默换号重试。心跳也只在放行后才发。
+
+修复后 5 分钟：32/32 成功，`stream_incomplete` 1 次（此前 2 小时 16 次），
+new-api `reason=done` 16 次 / `eof` 1 次。
+
 ## 残留
 
 - 异常收尾路径（上游中断、客户端主动断开）**没有机会写 `[DONE]`**，new-api 仍会记
