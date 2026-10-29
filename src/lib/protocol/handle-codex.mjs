@@ -234,7 +234,7 @@ function pinnedVmId(req) {
 export function pickCodexCandidates(
   projectRoot,
   req,
-  { stickyRouter = null, sessions = null, body = null, excluded = null, routing = {}, ownerScope = null } = {},
+  { stickyRouter = null, sessions = null, body = null, excluded = null, routing = {}, ownerScope = null, overflow = false } = {},
 ) {
   const pin = pinnedVmId(req)
   const owner = ownerScope || ownerScopeFromRequest(req)
@@ -266,8 +266,10 @@ export function pickCodexCandidates(
   const stickyKeys = stickyRouter?.collectPoolKeys?.(req, body || {}, { platform: 'openai' }) || []
   const sessionKey = stickyRouter?.extractPoolKey?.(req, body || {}, { platform: 'openai' }) || stickyKeys[0] || null
   const bound = sessionKey ? stickyRouter?.resolve?.(sessionKey) : null
+  // overflow=true：本 key 范围内的槽位全都没额度时，允许溢出到其它套餐的槽位，
+  // 否则请求会卡死在「这个 key 白名单里的号全废了」这条死路上。
   const vms = listVms(projectRoot, { codex: { quota: routingPolicy } }).filter(
-    (vm) => vmMatchesOwnerScope(vm, owner) && keyAllowsVm(scope, vm),
+    (vm) => vmMatchesOwnerScope(vm, owner) && (overflow || keyAllowsVm(scope, vm)),
   )
   const continuesResponse = !!body?.previous_response_id && !!bound?.vmId
   if (scope.vm_pool_id && vms.length === 0 && !continuesResponse) {
@@ -491,8 +493,21 @@ function clientGoneSignal(req, res) {
  */
 async function admitCodexCandidate(projectRoot, req, opts, { deadline, signal }) {
   let woken = false
+  // 本 key 范围内的槽位全部无额度时，溢出到其它套餐重试一次（可用关闭开关）。
+  const overflowAllowed = opts?.routing?.codex?.overflow_to_any_plan !== false && !pinnedVmId(req)
+  let overflowTried = false
   for (;;) {
-    const picked = pickCodexCandidates(projectRoot, req, opts)
+    let picked = pickCodexCandidates(projectRoot, req, opts)
+    if (
+      overflowAllowed &&
+      !overflowTried &&
+      (picked.error === 'quota_exhausted' || picked.error === 'capacity_unavailable') &&
+      picked.pin == null
+    ) {
+      overflowTried = true
+      picked = { ...pickCodexCandidates(projectRoot, req, { ...opts, overflow: true }), overflow_from: picked.error }
+      if (!picked.error) picked.overflow_from = 'quota_exhausted'
+    }
     const livePolicy = normalizeCodexRouting(opts.routing?.codex || opts.routing).quota
     if (picked.error && picked.error !== 'capacity_unavailable') return { picked }
     for (const candidate of picked.candidates || []) {
