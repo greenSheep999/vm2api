@@ -65,6 +65,7 @@ export function IqPane() {
     typeof window !== 'undefined'
       ? new URLSearchParams(window.location.hash.split('?')[1] || '').get('vm')
       : null
+  const [presetQuestion, setPresetQuestion] = useState<string | null>(null)
   const TABS = [
     ['workbench', '检测工作台'],
     ['questions', '题库'],
@@ -86,8 +87,15 @@ export function IqPane() {
           </Button>
         ))}
       </div>
-      {tab === 'workbench' ? <IqWorkbench presetVm={presetVm} /> : null}
-      {tab === 'questions' ? <IqQuestions /> : null}
+      {tab === 'workbench' ? <IqWorkbench presetVm={presetVm} presetQuestion={presetQuestion} /> : null}
+      {tab === 'questions' ? (
+        <IqQuestions
+          onOpen={(id) => {
+            setPresetQuestion(id)
+            setTab('workbench')
+          }}
+        />
+      ) : null}
       {tab === 'tasks' ? <IqTasks /> : null}
       {tab === 'records' ? <IqRecords /> : null}
     </div>
@@ -95,7 +103,13 @@ export function IqPane() {
 }
 
 /** 单次检测：按槽或按 Key 选目标，选题、选模型与 effort，跑完就地看结果。 */
-function IqWorkbench({ presetVm = null }: { presetVm?: string | null }) {
+function IqWorkbench({
+  presetVm = null,
+  presetQuestion = null,
+}: {
+  presetVm?: string | null
+  presetQuestion?: string | null
+}) {
   const vms = useQuery({
     queryKey: ['vms-for-iq'],
     queryFn: () => api<{ items: Array<{ id: string; platform?: string; status?: string }> }>('/api/panel/vms'),
@@ -113,7 +127,7 @@ function IqWorkbench({ presetVm = null }: { presetVm?: string | null }) {
   const [keyIds, setKeyIds] = useState<string[]>([])
   const [model, setModel] = useState('gpt-6-astra')
   const [effort, setEffort] = useState('high')
-  const [questionId, setQuestionId] = useState('candy')
+  const [questionId, setQuestionId] = useState(presetQuestion || 'candy')
   const [repeat, setRepeat] = useState(1)
   const [running, setRunning] = useState(false)
   const [results, setResults] = useState<Array<{ vm_id: string; verdict?: string; answer?: number | null; ok: boolean }>>([])
@@ -281,10 +295,15 @@ function IqWorkbench({ presetVm = null }: { presetVm?: string | null }) {
   )
 }
 
-/** 题库：内置题只读，自定义题可增删；每题标明判定规则，题面可展开。 */
-function IqQuestions() {
+const KIND_TEXT: Record<string, string> = { numeric: '数值题', image: '画图题' }
+
+/** 题库：卡片式，按题型分组，可搜索与筛选，点击题面展开完整提示词。 */
+function IqQuestions({ onOpen }: { onOpen: (id: string) => void }) {
   const qc = useQueryClient()
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [filter, setFilter] = useState<'all' | 'judged' | 'record' | 'custom'>('all')
+  const [keyword, setKeyword] = useState('')
+  const [adding, setAdding] = useState(false)
   const questions = useQuery({
     queryKey: ['iq-questions'],
     queryFn: () => api<{ items: IqQuestion[] }>('/api/panel/ops/iq/questions'),
@@ -310,6 +329,7 @@ function IqQuestions() {
     setTitle('')
     setPrompt('')
     setExpected('')
+    setAdding(false)
     toast.success('已添加题目')
     void qc.invalidateQueries({ queryKey: ['iq-questions'] })
   }
@@ -319,66 +339,181 @@ function IqQuestions() {
     void qc.invalidateQueries({ queryKey: ['iq-questions'] })
   }
 
+  const all = questions.data?.items || []
+  const items = all.filter((q) => {
+    const judged = q.auto_support === 1
+    if (filter === 'judged' && !judged) return false
+    if (filter === 'record' && judged) return false
+    if (filter === 'custom' && q.builtin === 1) return false
+    if (keyword.trim()) {
+      const k = keyword.trim().toLowerCase()
+      if (!`${q.title} ${q.id} ${q.prompt}`.toLowerCase().includes(k)) return false
+    }
+    return true
+  })
+  const groups = (['numeric', 'image'] as const)
+    .map((kind) => ({ kind, rows: items.filter((q) => q.kind === kind) }))
+    .filter((g) => g.rows.length > 0)
+  const custom = items.filter((q) => q.builtin !== 1 && !['numeric', 'image'].includes(q.kind))
+
   return (
-    <div className='space-y-3'>
-      <div className={CARD}>
-        <div className='text-sm font-semibold'>新增题目</div>
-        <div className='mt-2 grid gap-2 md:grid-cols-3'>
-          <Input placeholder='标题' className='h-7 text-[11px]' value={title} onChange={(e) => setTitle(e.target.value)} />
+    <div className='space-y-4'>
+      {/* 工具栏：搜索 + 筛选 + 新增 */}
+      <div className='flex flex-wrap items-center justify-between gap-2'>
+        <div className='flex flex-wrap items-center gap-2'>
           <Input
-            placeholder='期望答案（留空 = 只记录不判分）'
-            className='h-7 text-[11px]'
-            value={expected}
-            onChange={(e) => setExpected(e.target.value)}
+            placeholder='搜题目标题 / id / 题面…'
+            className='h-7 w-[220px] text-[11px]'
+            value={keyword}
+            onChange={(e) => setKeyword(e.target.value)}
           />
-          <Button size='sm' className='h-7 text-[11px]' onClick={() => void add()}>
-            添加
-          </Button>
+          <div className='flex gap-1'>
+            {([
+              ['all', `全部 ${all.length}`],
+              ['judged', '可判定'],
+              ['record', '仅记录'],
+              ['custom', '自定义'],
+            ] as const).map(([id, label]) => (
+              <Button
+                key={id}
+                size='sm'
+                variant={filter === id ? 'default' : 'outline'}
+                className='h-7 px-2.5 text-[11px]'
+                onClick={() => setFilter(id)}
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
         </div>
-        <textarea
-          className='mt-2 h-20 w-full rounded border bg-background p-2 text-[11px]'
-          placeholder='提示词（发送给模型的原文）'
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-        />
+        <Button size='sm' className='h-7 text-[11px]' onClick={() => setAdding((v) => !v)}>
+          + 新增题目
+        </Button>
       </div>
-      <div className={CARD}>
-        <div className='flex items-center justify-between'>
-          <div className='text-sm font-semibold'>题目列表</div>
-          <span className='text-[11px] text-muted-foreground'>只有 numeric_pass 的题参与自动分档</span>
+
+      {adding ? (
+        <div className='rounded-lg border bg-card p-3'>
+          <div className='grid gap-2 md:grid-cols-3'>
+            <Input placeholder='标题' className='h-7 text-[11px]' value={title} onChange={(e) => setTitle(e.target.value)} />
+            <Input
+              placeholder='标准答案（留空 = 只记录不判定）'
+              className='h-7 text-[11px]'
+              value={expected}
+              onChange={(e) => setExpected(e.target.value)}
+            />
+            <Button size='sm' className='h-7 text-[11px]' onClick={() => void add()}>
+              保存
+            </Button>
+          </div>
+          <textarea
+            className='mt-2 h-20 w-full rounded border bg-background p-2 text-[11px]'
+            placeholder='提示词（发送给模型的原文）'
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+          />
         </div>
-        <div className='mt-2 space-y-1'>
-          {(questions.data?.items || []).map((q) => (
-            <div key={q.id} className='flex items-start gap-2 border-b py-1.5 text-[11px] last:border-0'>
-              <div className='min-w-0 flex-1'>
-                <div className='flex items-center gap-2'>
-                  <span className='font-medium'>{q.title}</span>
-                  <span className='rounded bg-muted px-1 text-[10px] text-muted-foreground'>{q.id}</span>
-                  <span className='rounded bg-muted px-1 text-[10px]'>
-                    {q.judge_rule === 'numeric_pass' ? `期望 ${q.expected}` : q.judge_rule === 'structure' ? '形态检查' : '只记录'}
-                  </span>
-                  {q.builtin === 1 ? <span className='text-[10px] text-muted-foreground'>内置</span> : null}
-                </div>
-                <div
-                  className={cn(
-                    'mt-0.5 cursor-pointer whitespace-pre-wrap text-muted-foreground',
-                    expanded === q.id ? '' : 'line-clamp-2',
-                  )}
-                  onClick={() => setExpanded(expanded === q.id ? null : q.id)}
-                  title={expanded === q.id ? '点击收起' : '点击展开完整题面'}
-                >
-                  {q.prompt}
-                </div>
-              </div>
-              {q.builtin === 1 ? null : (
-                <Button size='sm' variant='ghost' className='h-6 px-1.5 text-[10px]' onClick={() => void remove(q.id)}>
-                  删除
-                </Button>
-              )}
+      ) : null}
+
+      {[...groups, { kind: 'other' as const, rows: custom }].map((group) =>
+        group.rows.length === 0 ? null : (
+          <section key={group.kind} className='space-y-2'>
+            <div className='flex items-center gap-2'>
+              <span className='text-xs font-semibold'>
+                {group.kind === 'other' ? '其他题目' : KIND_TEXT[group.kind]}
+              </span>
+              <span className='text-[10px] text-muted-foreground'>{group.rows.length} 道</span>
             </div>
-          ))}
+            <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-3'>
+              {group.rows.map((q) => {
+                const judged = q.auto_support === 1
+                const open = expanded === q.id
+                return (
+                  <div
+                    key={q.id}
+                    className={cn(
+                      'flex flex-col rounded-xl border bg-card p-3 transition-colors',
+                      open ? 'border-primary/40' : 'hover:border-primary/30',
+                    )}
+                  >
+                    <div className='flex items-start justify-between gap-2'>
+                      <div className='min-w-0'>
+                        <div className='truncate text-[13px] font-semibold'>{q.title}</div>
+                        <div className='mt-0.5 font-mono text-[10px] text-muted-foreground'>{q.id}</div>
+                      </div>
+                      <span
+                        className={cn(
+                          'shrink-0 rounded px-1.5 py-0.5 text-[10px]',
+                          judged
+                            ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                            : 'bg-muted text-muted-foreground',
+                        )}
+                      >
+                        {judged ? '可判定' : '仅记录'}
+                      </span>
+                    </div>
+
+                    <div className='mt-2 flex flex-wrap items-center gap-1'>
+                      <span className='rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground'>
+                        {q.builtin === 1 ? '内置' : '自定义'}
+                      </span>
+                      {judged && q.expected ? (
+                        <span className='rounded bg-primary/10 px-1.5 py-0.5 text-[10px] text-primary'>
+                          标准答案 {q.expected}
+                        </span>
+                      ) : null}
+                      {judged ? (
+                        <span className='rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground'>
+                          参与分档
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <p
+                      className={cn(
+                        'mt-2 cursor-pointer whitespace-pre-wrap text-[11px] leading-relaxed text-muted-foreground',
+                        open ? '' : 'line-clamp-3',
+                      )}
+                      onClick={() => setExpanded(open ? null : q.id)}
+                      title={open ? '点击收起' : '点击展开'}
+                    >
+                      {q.prompt}
+                    </p>
+
+                    <div className='mt-auto flex items-center justify-between pt-2.5'>
+                      <Button
+                        size='sm'
+                        variant='outline'
+                        className='h-6 px-2 text-[11px]'
+                        onClick={() => onOpen(q.id)}
+                      >
+                        在工作台打开
+                      </Button>
+                      {q.builtin === 1 ? (
+                        <span className='text-[10px] text-muted-foreground'>只读</span>
+                      ) : (
+                        <Button
+                          size='sm'
+                          variant='ghost'
+                          className='h-6 px-1.5 text-[10px] text-rose-600 dark:text-rose-400'
+                          onClick={() => void remove(q.id)}
+                        >
+                          删除
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        ),
+      )}
+
+      {items.length === 0 ? (
+        <div className='rounded-lg border border-dashed py-10 text-center text-xs text-muted-foreground'>
+          没有匹配的题目
         </div>
-      </div>
+      ) : null}
     </div>
   )
 }
