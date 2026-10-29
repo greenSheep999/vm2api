@@ -44,6 +44,8 @@ const FORWARD = [
   'x-openai-internal-codex-responses-lite',
   'x-openai-memgen-request',
   'x-openai-subagent',
+  'chatgpt-account-id',
+  'accept-language',
 ]
 
 function credentialFile(exec) {
@@ -158,7 +160,36 @@ function buildHeaders(args, token) {
     headers['x-codex-turn-state'] = ticket.state
     if (ticket.cookies?.length) headers.Cookie = ticket.cookies.join('; ')
   }
-  const ua = String(args?.envelope?.options?.user_agent || '').trim() || DEFAULT_UA
+  // UA 与 version 必须来自客户端本体：originator 说是 Desktop/Mac，UA 却写
+  // codex_cli_rs/linux 会被上游当成伪造客户端。缺 UA 时才用默认值。
+  const clientHeaders = args?.reqHeaders || {}
+  const ua =
+    String(clientHeaders['user-agent'] || '').trim() ||
+    String(args?.envelope?.options?.user_agent || '').trim() ||
+    DEFAULT_UA
+  const versionFromUa = /(\d+\.\d+\.\d+[0-9A-Za-z.\-]*)/.exec(ua)?.[1] || ''
+  if (!headers.version) headers.version = versionFromUa || IDENTITY.version
+  // 我们改写 session-id 时，window-id 与 turn-metadata 里的会话字段必须一起换，
+  // 否则上游会看到「session-id 是 A，thread/window/metadata 还是 B」的两套会话。
+  const sid = headers['session-id']
+  if (sid && typeof headers['x-codex-window-id'] === 'string') {
+    const suffix = headers['x-codex-window-id'].includes(':')
+      ? headers['x-codex-window-id'].slice(headers['x-codex-window-id'].lastIndexOf(':'))
+      : ''
+    headers['x-codex-window-id'] = `${sid}${suffix}`
+  }
+  if (sid && typeof headers['x-codex-turn-metadata'] === 'string') {
+    try {
+      const meta = JSON.parse(headers['x-codex-turn-metadata'])
+      const suffix = String(meta.window_id || '').includes(':')
+        ? String(meta.window_id).slice(String(meta.window_id).lastIndexOf(':'))
+        : ''
+      if (meta.session_id) meta.session_id = sid
+      if (meta.thread_id) meta.thread_id = sid
+      if (meta.window_id) meta.window_id = `${sid}${suffix}`
+      headers['x-codex-turn-metadata'] = JSON.stringify(meta)
+    } catch {}
+  }
   return {
     Host: UPSTREAM_HOST,
     Authorization: `Bearer ${token}`,
