@@ -163,6 +163,16 @@ function quotaRemainingRank(vm) {
   return Math.round((1 - Math.min(1, Math.max(0, used))) * 10_000)
 }
 
+/** 最近一个未来的额度重置时间（5h/7d 取更早的那个），用于 retry-after。 */
+function nextQuotaResetAt(vm, now = Date.now()) {
+  const extra = extraFromSummary(vm)
+  const limits = normalizeCodexLimits(extraToCodexSnapshot(extra))
+  const resets = [limits.reset_5h_at, limits.reset_7d_at, vm?.reset_5h, vm?.reset_7d]
+    .map((value) => Date.parse(value || ''))
+    .filter((value) => Number.isFinite(value) && value > now)
+  return resets.length ? Math.min(...resets) : null
+}
+
 function quotaResetAt(vm) {
   const extra = extraFromSummary(vm)
   const limits = normalizeCodexLimits(extraToCodexSnapshot(extra))
@@ -323,7 +333,16 @@ export function orderCodexSessionSlots(
             : statuses.includes('parked_gate')
               ? 'operator_gate'
               : 'capacity_unavailable'
-    const retryAt = allQuota ? null : rpmRetryAt(candidates, now) || holdRetryAt(candidates, now)
+    // 额度打满时 retryAt 取「最早一个未来重置时间」，对端的 retry-after 才有意义；
+    // 拿不到时间就退回 15 分钟，避免让对端立刻重试。
+    const quotaResets = allQuota
+      ? ids.map((id) => nextQuotaResetAt(byId.get(id), now)).filter((t) => Number.isFinite(t))
+      : []
+    const retryAt = allQuota
+      ? quotaResets.length
+        ? Math.min(...quotaResets)
+        : now + 15 * 60_000
+      : rpmRetryAt(candidates, now) || holdRetryAt(candidates, now)
     return {
       error: reason,
       retryAt,
