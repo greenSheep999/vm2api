@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Save, TicketCheck } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { ChevronDown, Save, TicketCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
@@ -12,6 +15,31 @@ import type { OpsTicketPolicy } from './types'
 const CARD = 'rounded-lg border bg-card p-4'
 
 /** 策略卡：门票开关与参数。保存走 PUT /api/panel/routing（整份配置回写）。 */
+const HARVEST_MODELS = [
+  'gpt-6-astra',
+  'gpt-6.1-sol',
+  'gpt-6-sol',
+  'gpt-5.6-sol',
+  'gpt-5.6-luna',
+]
+
+/** 拉当前 DNS 解析到的边缘节点，显示出来（手填优先，留空则用这里的）。 */
+function EdgePreview() {
+  const q = useQuery({
+    queryKey: ['ops-edge-ips'],
+    queryFn: () => api<{ ips: string[]; source: string; at: string }>('/api/panel/ops/edge-ips'),
+    refetchInterval: 60_000,
+  })
+  const ips = q.data?.ips || []
+  return (
+    <p className='text-[11px] text-muted-foreground'>
+      {ips.length
+        ? `当前可用边缘（${q.data?.source}）：${ips.join('、')}`
+        : '暂时拿不到边缘 IP（DNS 解析失败）'}
+    </p>
+  )
+}
+
 export function PolicyCard({ policy }: { policy: OpsTicketPolicy }) {
   const [draft, setDraft] = useState<OpsTicketPolicy>(policy)
   const [saving, setSaving] = useState(false)
@@ -19,6 +47,19 @@ export function PolicyCard({ policy }: { policy: OpsTicketPolicy }) {
 
   const patch = (next: Partial<OpsTicketPolicy>) =>
     setDraft((cur) => ({ ...cur, ...next }))
+
+  /** 自动获取边缘 IP（Cloudflare anycast）：一键填进草稿，保存后生效。 */
+  async function fillEdgeIps() {
+    try {
+      const data = await api<{ ips: string[] }>('/api/panel/ops/edge-ips')
+      const ips = data?.ips || []
+      if (!ips.length) return toast.warning('DNS 没解析到边缘 IP，稍后再试')
+      patch({ edge_ips: ips })
+      toast.success(`已填入 ${ips.length} 个边缘 IP`)
+    } catch (e) {
+      toast.error(`获取失败：${(e as Error).message}`)
+    }
+  }
 
   async function save() {
     setSaving(true)
@@ -56,19 +97,58 @@ export function PolicyCard({ policy }: { policy: OpsTicketPolicy }) {
       </div>
       <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3'>
         <div className='space-y-1.5'>
-          <Label className='text-xs'>目标模型（逗号分隔，空 = 全部）</Label>
-          <Input
-            value={draft.models.join(',')}
-            placeholder='gpt-6-astra,gpt-6.1-sol'
-            onChange={(e) =>
-              patch({
-                models: e.target.value
-                  .split(',')
-                  .map((x) => x.trim())
-                  .filter(Boolean),
-              })
-            }
-          />
+          <Label className='text-xs'>目标模型（多选，空 = 全部）</Label>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant='outline' size='sm' className='h-8 w-full justify-between text-xs font-normal'>
+                <span className='truncate'>
+                  {draft.models.length ? draft.models.join(', ') : '全部模型'}
+                </span>
+                <ChevronDown className='ml-2 h-3.5 w-3.5 shrink-0 opacity-60' />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className='w-[280px] p-1' align='start'>
+              <div className='max-h-64 overflow-auto'>
+                {HARVEST_MODELS.map((model) => {
+                  const checked = draft.models.includes(model)
+                  return (
+                    <label
+                      key={model}
+                      className='flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-accent'
+                    >
+                      <Checkbox
+                        checked={checked}
+                        onCheckedChange={(next) =>
+                          patch({
+                            models: next
+                              ? [...draft.models, model]
+                              : draft.models.filter((m) => m !== model),
+                          })
+                        }
+                      />
+                      <span className='font-mono'>{model}</span>
+                    </label>
+                  )
+                })}
+              </div>
+              <div className='mt-1 flex justify-between border-t px-2 pt-1.5'>
+                <button
+                  type='button'
+                  className='text-[11px] text-muted-foreground hover:text-foreground'
+                  onClick={() => patch({ models: [] })}
+                >
+                  清空（= 全部）
+                </button>
+                <button
+                  type='button'
+                  className='text-[11px] text-muted-foreground hover:text-foreground'
+                  onClick={() => patch({ models: [...HARVEST_MODELS] })}
+                >
+                  全选
+                </button>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
         <div className='space-y-1.5'>
           <Label className='text-xs'>目标块数（0 = 按套餐）</Label>
@@ -131,20 +211,61 @@ export function PolicyCard({ policy }: { policy: OpsTicketPolicy }) {
             onCheckedChange={(edge_direct) => patch({ edge_direct })}
           />
         </div>
-        <Textarea
-          rows={3}
-          spellCheck={false}
-          placeholder={'172.64.155.209\n104.18.32.47'}
-          value={draft.edge_ips.join('\n')}
-          onChange={(e) =>
-            patch({
-              edge_ips: e.target.value
-                .split('\n')
-                .map((x) => x.trim())
-                .filter(Boolean),
-            })
-          }
-        />
+        <div className='flex items-start gap-2'>
+          <Textarea
+            rows={2}
+            spellCheck={false}
+            placeholder={'留空 = 自动从 DNS 获取；也可以手填，一行一个'}
+            value={draft.edge_ips.join('\n')}
+            onChange={(e) =>
+              patch({
+                edge_ips: e.target.value
+                  .split(/[,\n\s]+/)
+                  .map((x) => x.trim())
+                  .filter(Boolean),
+              })
+            }
+          />
+          <div className='flex shrink-0 flex-col gap-1'>
+            <Button
+              type='button'
+              size='sm'
+              variant='outline'
+              className='h-7 px-2 text-[11px]'
+              onClick={() => void fillEdgeIps()}
+            >
+              自动获取
+            </Button>
+            <Button
+              type='button'
+              size='sm'
+              variant='ghost'
+              className='h-7 px-2 text-[11px]'
+              onClick={() => patch({ edge_ips: [] })}
+            >
+              清空
+            </Button>
+          </div>
+        </div>
+        <label className='flex items-center gap-2 text-[11px] text-muted-foreground'>
+          <Checkbox
+            checked={draft.edge_auto}
+            onCheckedChange={(edge_auto) => patch({ edge_auto: edge_auto === true })}
+          />
+          持续自动获取（每
+          <Input
+            type='number'
+            min={60}
+            max={86400}
+            className='h-6 w-[70px] text-[11px]'
+            value={draft.edge_auto_interval_seconds}
+            onChange={(e) =>
+              patch({ edge_auto_interval_seconds: Math.max(60, Number(e.target.value) || 600) })
+            }
+          />
+          秒重新解析 DNS）
+        </label>
+        <EdgePreview />
         <p className='text-[11px] text-muted-foreground'>
           把连接目标换成指定 Cloudflare 边缘 IP，SNI 仍是 chatgpt.com、出口仍是槽位代理——
           换路由不换身份。留空/关闭则回到经网关的默认方式。

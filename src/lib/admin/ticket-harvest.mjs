@@ -21,6 +21,31 @@ import { judgeTurnState, expectedTurnStateBlocks } from '../protocol/turn-state.
 
 const UPSTREAM_URL = 'https://chatgpt.com/backend-api/codex/responses'
 
+/**
+ * 边缘节点解析：优先用策略里手填的 IP；留空则自动从 DNS 取 chatgpt.com 的 A 记录
+ * （Cloudflare anycast）。缓存 10 分钟，避免每次打票都查 DNS。
+ */
+let edgeCache = { at: 0, ips: [] }
+export async function resolveEdgeIps(policy = null) {
+  const manual = Array.isArray(policy?.edge_ips) ? policy.edge_ips.map((v) => String(v).trim()).filter(Boolean) : []
+  const auto = policy?.edge_auto !== false
+  // 手填 + 不允许自动 → 只用手的；手填 + 允许自动 → 手填优先，但定期刷新缓存
+  if (manual.length && !auto) return { ips: manual, source: 'policy', at: new Date().toISOString() }
+  const ttlMs = Math.max(60, Number(policy?.edge_auto_interval_seconds) || 600) * 1000
+  if (manual.length) return { ips: manual, source: 'policy', at: new Date().toISOString() }
+  if (edgeCache.ips.length && Date.now() - edgeCache.at < ttlMs) {
+    return { ips: edgeCache.ips, source: 'dns-cache', at: new Date(edgeCache.at).toISOString() }
+  }
+  try {
+    const list = await dns.resolve4('chatgpt.com')
+    const ips = [...new Set(Array.isArray(list) ? list : [])].slice(0, 4)
+    if (ips.length) edgeCache = { at: Date.now(), ips }
+    return { ips, source: 'dns', at: new Date().toISOString() }
+  } catch {
+    return { ips: edgeCache.ips, source: edgeCache.ips.length ? 'dns-cache' : 'unavailable', at: new Date().toISOString() }
+  }
+}
+
 // 住宅代理不支持 IPv6，chatgpt.com 的 AAAA 会先被解析导致 SOCKS HostUnreachable；
 // 这里自己解析 A 记录并缓存。
 let cachedV4 = { at: 0, ip: '' }
@@ -847,7 +872,8 @@ export async function runHarvest({ cfg, projectRoot, vmId, model, policy = null 
   const planType = vm?.codex?.plan_type || null
 
   // ---- 直连模式：指定目标边缘 IP，SNI 保持 chatgpt.com，出口仍是槽位代理 ----
-  const edgeIps = Array.isArray(policy?.edge_ips) ? policy.edge_ips : []
+  const resolvedEdges = policy?.edge_direct ? await resolveEdgeIps(policy) : { ips: [] }
+  const edgeIps = resolvedEdges.ips
   if (policy?.edge_direct && edgeIps.length) {
     const accounts = readCodexAccounts(projectRoot, vmId)
     const token = accounts.find((a) => a?.access_token || a?.accessToken)?.access_token

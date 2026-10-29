@@ -438,19 +438,19 @@ export function HarvestPane() {
                 </Button>
               </div>
 
-              <div className='mt-3 space-y-1.5'>
+              <div className='mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3'>
                 {a.models.map((t) => {
                   const key = `${a.id}\u0000${t.model}`
                   return (
                     <div
                       key={t.model}
                       className={cn(
-                        'rounded-lg border border-l-2 bg-card px-2.5 py-2 text-xs',
+                        'flex flex-col rounded-lg border px-2.5 py-2 text-xs',
                         t.probe_verdict === 'healthy' || t.probe_verdict === 'healthy_same'
-                          ? 'border-l-emerald-500'
+                          ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30'
                           : t.probe_verdict === 'degraded' || t.probe_verdict === 'route_changed'
-                            ? 'border-l-rose-500'
-                            : 'border-l-muted-foreground/30',
+                            ? 'border-rose-300 bg-rose-50 dark:border-rose-900 dark:bg-rose-950/25'
+                            : 'border-border bg-muted/40',
                       )}
                     >
                       <div className='flex flex-wrap items-center justify-between gap-2 border-b pb-1.5'>

@@ -119,6 +119,8 @@ export function normalizeCodexTicketPolicy(raw = {}) {
     auto_park: src.auto_park === true,
     inject: src.inject === true,
     probe_routing: src.probe_routing === true,
+    edge_auto: src.edge_auto !== false,
+    edge_auto_interval_seconds: int(src.edge_auto_interval_seconds, 600, 60, 86_400),
     overflow_to_any_plan: src.overflow_to_any_plan === true,
     edge_ips: Array.isArray(src.edge_ips)
       ? src.edge_ips

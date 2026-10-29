@@ -42,6 +42,8 @@ export type OpsTicketPolicy = {
   inject: boolean
   probe_routing: boolean
   overflow_to_any_plan: boolean
+  edge_auto: boolean
+  edge_auto_interval_seconds: number
 }
 
 export type OpsIqResult = {

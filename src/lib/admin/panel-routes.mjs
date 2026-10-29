@@ -2191,6 +2191,14 @@ export function createPanelHandler(ctx) {
         }
       }
 
+      // GET /api/panel/ops/edge-ips — 当前边缘节点（手填优先，否则 DNS 自动解析）
+      if (req.method === 'GET' && p === '/api/panel/ops/edge-ips') {
+        const { resolveEdgeIps } = await import('./ticket-harvest.mjs')
+        const policy = ctx.routingConfig?.codex?.ticket || {}
+        const resolved = await resolveEdgeIps(policy)
+        return json(res, 200, { ok: true, data: resolved })
+      }
+
       // GET /api/panel/ops/pool — 统一门票库
       if (req.method === 'GET' && p === '/api/panel/ops/pool') {
         const { listPool } = await import('./ticket-borrow.mjs')
