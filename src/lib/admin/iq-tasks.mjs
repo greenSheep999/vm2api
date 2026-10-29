@@ -349,13 +349,15 @@ export function listResults({ kind = null, limit = 200 } = {}) {
   const keyByVm = new Map()
   const keyList = []
   try {
-    const keys = db().prepare('SELECT id, name, allowed_vms FROM api_keys').all()
+    const keys = db()
+      .prepare('SELECT id, name, status, allowed_vms FROM api_keys WHERE deleted_at IS NULL ORDER BY name')
+      .all()
     for (const k of keys) {
-      keyList.push({ id: k.id, name: k.name })
       let allow = []
       try {
         allow = JSON.parse(k.allowed_vms || '[]')
       } catch {}
+      keyList.push({ id: k.id, name: k.name, status: k.status || 'active', slots: allow.length })
       for (const vmId of allow) {
         if (!keyByVm.has(vmId)) keyByVm.set(vmId, [])
         keyByVm.get(vmId).push({ id: k.id, name: k.name })

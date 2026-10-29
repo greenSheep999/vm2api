@@ -86,14 +86,19 @@ function previewOpsAcl() {
                 ],
               }
             } else if (url.includes('/iq/results')) {
+              const svg = '<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 320 200\"><rect width=\"320\" height=\"200\" fill=\"#fafaf7\"/><circle cx=\"60\" cy=\"150\" r=\"26\" fill=\"none\" stroke=\"#1f2937\" stroke-width=\"3\"/><circle cx=\"130\" cy=\"150\" r=\"26\" fill=\"none\" stroke=\"#1f2937\" stroke-width=\"3\"/><path d=\"M60 150 L95 110 L130 150\" fill=\"none\" stroke=\"#1f2937\" stroke-width=\"3\"/><path d=\"M95 110 L108 96\" stroke=\"#1f2937\" stroke-width=\"3\"/><ellipse cx=\"185\" cy=\"120\" rx=\"38\" ry=\"26\" fill=\"#fff\" stroke=\"#1f2937\" stroke-width=\"3\"/><path d=\"M218 112 q26 -8 30 6 q-14 6 -30 2z\" fill=\"#f59e0b\"/><circle cx=\"203\" cy=\"112\" r=\"3\" fill=\"#1f2937\"/></svg>'
               const mk = (id: string, vm: string, kind: string, verdict: string, answer: number | null, expected: number | null, min: number) => ({
-                id, vm_id: vm, model: 'gpt-6-astra', verdict, answer, expected,
+                id, vm_id: vm, model: 'gpt-6-astra', effort: 'high', verdict, answer, expected,
                 question_id: kind, question_kind: kind,
                 question_title: kind === 'candy' ? '糖果计数' : kind === 'probe' ? '门票探针' : '鹈鹕骑自行车',
+                judge_rule: kind === 'candy' ? 'numeric_pass' : kind === 'pelican' ? 'structure' : 'record_only',
+                artifact: kind === 'pelican' ? svg : null,
                 source: min % 2 ? 'task' : 'single',
                 started_at: new Date(now - min * 60000).toISOString(),
                 duration_ms: 2000 + (min % 7) * 400,
-                keys: vm === 'vm-13' ? [{ id: 'key_f9aaa7d2dc56', name: 'new-api-plus-self' }] : [{ id: 'key_aaa', name: 'new-api-self' }],
+                keys: vm === 'vm-13'
+                  ? [{ id: 'key_f9aaa7d2dc56', name: 'new-api-plus-self' }]
+                  : [{ id: 'key_87b1b7bb0cdb', name: 'new-api-self' }],
               })
               data = {
                 items: [
@@ -105,8 +110,10 @@ function previewOpsAcl() {
                   mk('a6', 'vm-13', 'pelican', 'structure_ok', null, null, 22),
                 ],
                 keys: [
-                  { id: 'key_f9aaa7d2dc56', name: 'new-api-plus-self' },
-                  { id: 'key_aaa', name: 'new-api-self' },
+                  { id: 'key_f9aaa7d2dc56', name: 'new-api-plus-self', status: 'active', slots: 7 },
+                  { id: 'key_87b1b7bb0cdb', name: 'new-api-self', status: 'active', slots: 10 },
+                  { id: 'key_76456e470805', name: 'new-api-GPT-Pro-Stable-Self', status: 'active', slots: 10 },
+                  { id: 'key_4c11959ab9b3', name: 'gpt-05-solo', status: 'disabled', slots: 1 },
                 ],
               }
             }
