@@ -179,11 +179,23 @@ async function sendUpstream({ body, headers, proxyUrl, timeoutMs, idleTimeoutMs,
     const startedAt = Date.now()
     let firstByteMs = null
     let ttftMs = null
+    let sawCompleted = false
+    let sawData = false
     let settled = false
+    let lastDataAt = Date.now()
+    let heartbeat = null
+
     const finish = (result) => {
       if (settled) return
       settled = true
-      resolve({ ...result, firstByteMs, ttftMs, generationMs: Date.now() - (startedAt + (ttftMs ?? 0)) })
+      if (heartbeat) clearInterval(heartbeat)
+      resolve({
+        ...result,
+        firstByteMs,
+        ttftMs,
+        generationMs: Date.now() - (startedAt + (ttftMs ?? 0)),
+        saw_completed: sawCompleted,
+      })
     }
 
     const req = https.request(
@@ -218,33 +230,88 @@ async function sendUpstream({ body, headers, proxyUrl, timeoutMs, idleTimeoutMs,
               committed: false,
             })
           })
+          res.on('error', () =>
+            finish({ ok: false, status: 0, headers: responseHeaders, body: {}, transportError: true }),
+          )
           return
         }
+
         let buffer = ''
-        let sawContent = false
         res.setEncoding('utf8')
         if (firstByteMs == null) firstByteMs = Date.now() - startedAt
+
+        // 思考期上游可能长时间不发数据：给客户端打 SSE 注释心跳，别让客户端读超时。
+        heartbeat = setInterval(() => {
+          if (settled || Date.now() - lastDataAt < 15_000) return
+          try {
+            onLine(': keepalive')
+          } catch {}
+        }, 15_000)
+
         res.on('data', (chunk) => {
+          lastDataAt = Date.now()
           if (firstByteMs == null) firstByteMs = Date.now() - startedAt
           buffer += chunk
           let idx
           while ((idx = buffer.indexOf('\n')) >= 0) {
             const line = buffer.slice(0, idx).replace(/\r$/, '')
             buffer = buffer.slice(idx + 1)
-            if (!sawContent && /"type"\s*:\s*"response\.(output_text|reasoning|output_item)\./.test(line)) {
-              sawContent = true
+            if (!sawData && /"type"\s*:\s*"response\.(output_text|reasoning|output_item)\./.test(line)) {
+              sawData = true
               ttftMs = Date.now() - startedAt
             }
+            if (line.includes('response.completed')) sawCompleted = true
             try {
               onLine(line)
             } catch {}
           }
         })
+
+        // 上游被重置/中断：必须结束 Promise，否则网关会挂到超时才断流。
+        res.on('aborted', () =>
+          finish({
+            ok: false,
+            status: 0,
+            headers: responseHeaders,
+            body: {},
+            committed: sawData,
+            terminalState: 'incomplete',
+            transportError: !sawData,
+            error: 'upstream_aborted',
+          }),
+        )
+        res.on('error', (error) =>
+          finish({
+            ok: false,
+            status: 0,
+            headers: responseHeaders,
+            body: {},
+            committed: sawData,
+            terminalState: 'incomplete',
+            transportError: !sawData,
+            error: String(error?.message || error),
+          }),
+        )
         res.on('end', () => {
           if (buffer) {
+            if (buffer.includes('response.completed')) sawCompleted = true
             try {
               onLine(buffer)
             } catch {}
+          }
+          if (!sawCompleted) {
+            // 没有终止事件 = 流被截断，不能当成功返回（客户端会报 stream closed）。
+            finish({
+              ok: false,
+              status: 200,
+              headers: responseHeaders,
+              body: {},
+              committed: sawData,
+              terminalState: 'incomplete',
+              transportError: false,
+              error: 'missing_response_completed',
+            })
+            return
           }
           finish({
             ok: true,
@@ -257,14 +324,23 @@ async function sendUpstream({ body, headers, proxyUrl, timeoutMs, idleTimeoutMs,
         })
       },
     )
-    const idle = Number(idleTimeoutMs) || 0
-    if (idle > 0) {
-      req.setTimeout(idle, () => req.destroy(new Error('codex_direct_idle_timeout')))
-    }
+
+    // 直连不做短空闲掐断：上游思考期静默是正常的，靠整体超时兜底。
+    const cap = Math.max(Number(timeoutMs) || 600_000, 60_000)
+    req.setTimeout(cap, () => req.destroy(new Error('codex_direct_timeout')))
     if (signal) {
       signal.addEventListener('abort', () => req.destroy(new Error('client_cancelled')), { once: true })
     }
-    req.on('error', (error) => finish({ ok: false, status: 0, headers: {}, body: {}, transportError: true, error: String(error?.message || error) }))
+    req.on('error', (error) =>
+      finish({
+        ok: false,
+        status: 0,
+        headers: {},
+        body: {},
+        transportError: true,
+        error: String(error?.message || error),
+      }),
+    )
     req.end(payload)
   })
 }
