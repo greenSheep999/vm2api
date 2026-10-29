@@ -24,6 +24,7 @@ import { modelMatchesAllowlist } from './slot-model-gate.mjs'
 import { proxyBlockedReason } from '../vm/proxy-policy.mjs'
 import { activeHoursOf, evaluateActiveHours } from './active-hours.mjs'
 import { effectiveOpenAIPolicy, evaluateOpenAIQuotaGate, normalizeOpenAIQuotaPolicy } from './openai-quota-policy.mjs'
+import { orderByProbeQuality, readProbeVerdicts } from './probe-quality.mjs'
 
 // `stopped` is leftover Claude docker lifecycle. Codex kernel is independent.
 const HARD_UNAVAILABLE = new Set(['dead', 'error', 'disabled'])
@@ -243,6 +244,7 @@ export function orderCodexSessionSlots(
     roundRobinCursor = null,
     model = null,
     excluded = null,
+    probeRouting = false,
   } = {},
 ) {
   const list = Array.isArray(vms) ? vms : []
@@ -316,10 +318,17 @@ export function orderCodexSessionSlots(
     }
   }
   if (roundRobinCursor == null) bumpOpenAICursor()
-  const sticky = ordered.preferred === 'hit' && ordered.ids[0] === boundVmId
+  // 探针优先：healthy 号排在降智号前面，但降智号仍保留（池子只剩它们时照常服务）。
+  let finalIds = ordered.ids
+  if (probeRouting) {
+    try {
+      finalIds = orderByProbeQuality(ordered.ids, readProbeVerdicts(ordered.ids))
+    } catch {}
+  }
+  const sticky = ordered.preferred === 'hit' && finalIds[0] === boundVmId
   return {
     ...picked,
-    ids: ordered.ids,
+    ids: finalIds,
     ready: ordered.ids.filter((id) => (picked.ready || []).includes(id)),
     parked: (picked.parked || []).filter((id) => ordered.ids.includes(id)),
     sticky,

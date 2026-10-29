@@ -187,6 +187,31 @@ export function PolicyCard({ policy }: { policy: OpsTicketPolicy }) {
         </label>
         <label className='flex items-start gap-2 rounded-md border p-2.5 text-xs'>
           <Switch
+            checked={draft.probe_routing}
+            onCheckedChange={(probe_routing) => patch({ probe_routing })}
+          />
+          <span>
+            <span className='font-medium'>按探针结论排序调度</span>
+            <span className='mt-0.5 block text-[11px] text-muted-foreground'>
+              探针 healthy 的账号优先接流量，降智账号排到后面（仍保留，池子空了照常服务）。
+            </span>
+          </span>
+        </label>
+        <label className='flex items-start gap-2 rounded-md border p-2.5 text-xs'>
+          <Switch
+            checked={draft.inject}
+            onCheckedChange={(inject) => patch({ inject })}
+          />
+          <span>
+            <span className='font-medium'>注入票库门票</span>
+            <span className='mt-0.5 block text-[11px] text-muted-foreground'>
+              业务请求带上票库里「已验证」的票（只注入验证过的，过期自动不用）。
+              当前账号若被锁档，注入也救不回来。
+            </span>
+          </span>
+        </label>
+        <label className='flex items-start gap-2 rounded-md border p-2.5 text-xs'>
+          <Switch
             checked={draft.auto_park}
             onCheckedChange={(auto_park) => patch({ auto_park })}
           />

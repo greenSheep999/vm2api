@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Activity, AlertTriangle, Handshake, Loader2, Play, TicketCheck } from 'lucide-react'
+import { Activity, AlertTriangle, Boxes, Handshake, Loader2, Play, TicketCheck } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -312,6 +313,8 @@ export function HarvestPane() {
         )
       })()}
 
+      <PoolCard />
+
       {data.policy ? <PolicyCard policy={data.policy} /> : null}
 
       <section className='space-y-3'>
@@ -567,5 +570,71 @@ export function HarvestPane() {
         不保存票原文。自动打票调度尚未接入，目前只有手动按钮。
       </p>
     </div>
+  )
+}
+
+
+type PoolItem = {
+  vm_id: string
+  model: string
+  source: string | null
+  verdict: string
+  len: number | null
+  expires_at: string | null
+  updated_at: string | null
+}
+
+/** 统一门票库：只有已验证的票会被业务注入，所以这里就是「当前可以借的票」。 */
+function PoolCard() {
+  const q = useQuery({
+    queryKey: ['ops-pool'],
+    queryFn: () => api<{ items: PoolItem[] }>('/api/panel/ops/pool'),
+    refetchInterval: 30_000,
+  })
+  const items = q.data?.items || []
+  return (
+    <Card>
+      <CardHeader className='flex flex-row items-center justify-between space-y-0 pb-2'>
+        <CardTitle className='flex items-center gap-2 text-sm'>
+          <Boxes className='h-4 w-4' />
+          门票库
+          <span className='rounded bg-muted px-1.5 text-[10px] font-normal text-muted-foreground'>
+            {items.length} 张已验证
+          </span>
+        </CardTitle>
+        <span className='text-[11px] text-muted-foreground'>
+          只有续接验证通过的票会入库，供业务注入与借票使用
+        </span>
+      </CardHeader>
+      <CardContent>
+        {items.length === 0 ? (
+          <p className='py-3 text-center text-xs text-muted-foreground'>
+            还没有已验证的票 —— 打票/探针通过、或借票验证成功后才会出现在这里
+          </p>
+        ) : (
+          <div className='flex flex-wrap gap-2'>
+            {items.map((it) => (
+              <div
+                key={`${it.vm_id}-${it.model}`}
+                className='rounded-md border px-2 py-1.5 font-mono text-[11px]'
+              >
+                <span className='font-medium'>{it.vm_id}</span>
+                <span className='mx-1 text-muted-foreground'>·</span>
+                {it.model}
+                <span className='ml-2 rounded bg-emerald-500/15 px-1 text-[10px] text-emerald-700 dark:text-emerald-300'>
+                  {it.len ?? 0} 字符
+                </span>
+                {it.source ? (
+                  <span className='ml-2 text-[10px] text-muted-foreground'>来源 {it.source}</span>
+                ) : null}
+                <span className='ml-2 text-[10px] text-muted-foreground'>
+                  {it.expires_at ? `${new Date(it.expires_at).toLocaleTimeString()} 过期` : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }

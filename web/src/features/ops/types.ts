@@ -36,6 +36,8 @@ export type OpsTicketPolicy = {
   gate_scheduling: boolean
   probe_interval_seconds: number
   auto_park: boolean
+  inject: boolean
+  probe_routing: boolean
 }
 
 export type OpsIqResult = {

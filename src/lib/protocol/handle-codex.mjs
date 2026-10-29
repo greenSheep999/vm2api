@@ -251,6 +251,7 @@ export function pickCodexCandidates(
     if (!codexSlotAllowsModel(vm, model)) return { error: 'model_not_allowed', pin, ids: [] }
     const ordered = orderCodexSessionSlots([vm], {
       pin,
+      probeRouting: false,
       excluded,
       quotaPolicy: routingPolicy,
     })
@@ -279,6 +280,7 @@ export function pickCodexCandidates(
     model,
     excluded,
     quotaPolicy: routingPolicy,
+    probeRouting: routing?.codex?.ticket?.probe_routing === true,
   })
   // A resting home migrates the conversation like a gone one: the next slot rebinds it.
   const boundLeft = ordered.boundState === 'gone' || ordered.boundState === 'resting'
