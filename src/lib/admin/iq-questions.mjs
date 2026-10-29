@@ -176,7 +176,8 @@ export function ensureBuiltinQuestions() {
      ON CONFLICT(id) DO NOTHING`,
   )
   for (const q of BUILTIN) {
-    insert.run(q.id, q.title, q.kind, q.prompt, q.judge_rule, q.expected, q.auto_support, at, at)
+    // node:sqlite 不能绑定 undefined：没有期望答案的题必须显式 null。
+    insert.run(q.id, q.title, q.kind, q.prompt, q.judge_rule, q.expected ?? null, q.auto_support ? 1 : 0, at, at)
   }
   return listQuestions()
 }
