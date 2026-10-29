@@ -372,7 +372,9 @@ async function mintShot({ edgeIp, proxyUrl, token, model, sessionId, state, prom
   return new Promise((resolve) => {
     const payload = JSON.stringify({
       model,
-      instructions: 'Reply with exactly OK. Do not call tools.',
+      // 只有探针/铸票这种「要一句 OK」的场景才注入指令；
+      // 自定义题目必须让模型按题面作答，否则测出来的是被指令污染的结果。
+      ...(prompt ? {} : { instructions: 'Reply with exactly OK. Do not call tools.' }),
       stream: true,
       store: false,
       input: [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: prompt || 'Reply OK' }] }],
@@ -411,8 +413,9 @@ async function mintShot({ edgeIp, proxyUrl, token, model, sessionId, state, prom
       (res) => {
         const next = res.headers['x-codex-turn-state'] || ''
         let peek = ''
+        const PEEK_LIMIT = 400_000
         res.on('data', (chunk) => {
-          if (peek.length < 4000) peek += chunk.toString('utf8')
+          if (peek.length < PEEK_LIMIT) peek += chunk.toString('utf8')
         })
         res.on('end', () => {
           const modelEcho = /"model"\s*:\s*"([^"]+)"/.exec(peek)?.[1] || null
