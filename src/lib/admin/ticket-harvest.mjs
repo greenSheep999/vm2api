@@ -223,7 +223,7 @@ function latestTicketRow(vmId, model, sinceIso) {
  * 身份头必须齐全（originator/version/OpenAI-Beta）——实测缺任意一个上游都不铸票，
  * 这也正是 worker 白名单那个 bug 的影响面。
  */
-async function mintShot({ edgeIp, proxyUrl, token, model, sessionId, state, prompt = null }) {
+async function mintShot({ edgeIp, proxyUrl, token, model, sessionId, state, prompt = null, route = [] }) {
   const dialIp = edgeIp || (await upstreamIPv4()) || UPSTREAM_HOST
   return new Promise((resolve) => {
     const payload = JSON.stringify({
@@ -249,6 +249,8 @@ async function mintShot({ edgeIp, proxyUrl, token, model, sessionId, state, prom
       session_id: sessionId,
     }
     if (state) headers['x-codex-turn-state'] = state
+    // 票必须和它铸造时的路由 cookie 一起回带，否则上游认为路由不匹配、直接重铸。
+    if (Array.isArray(route) && route.length) headers.Cookie = route.join('; ')
     const req = https.request(
       {
         host: dialIp,
@@ -271,11 +273,18 @@ async function mintShot({ edgeIp, proxyUrl, token, model, sessionId, state, prom
           const modelEcho = /"model"\s*:\s*"([^"]+)"/.exec(peek)?.[1] || null
           const rawCookies = [].concat(res.headers['set-cookie'] || [])
           // Cloudflare 路由对：__cflb(机房) + __oailb(网关)，sub 用它们判断路由是否漂移。
-          const route = rawCookies
-            .map((c) => String(c).split(';')[0])
+          const pairs = rawCookies.map((c) => String(c).split(';')[0])
+          const route = pairs
             .filter((c) => c.startsWith('__cflb=') || c.startsWith('__oailb='))
             .sort()
-          resolve({ status: res.statusCode, state: next, model: modelEcho, preview: peek, route })
+          resolve({
+            status: res.statusCode,
+            state: next,
+            model: modelEcho,
+            preview: peek,
+            route,
+            cookies: route,
+          })
         })
       },
     )
@@ -306,14 +315,22 @@ export async function runTicketProbe({ projectRoot, vmId, model, edgeIp = null, 
 
   const shot1 = await mintShot({ edgeIp, proxyUrl, token, model: useModel, sessionId })
   const shot2 = shot1.state
-    ? await mintShot({ edgeIp, proxyUrl, token, model: useModel, sessionId, state: shot1.state })
+    ? await mintShot({
+        edgeIp,
+        proxyUrl,
+        token,
+        model: useModel,
+        sessionId,
+        state: shot1.state,
+        route: shot1.cookies || [],
+      })
     : null
 
   let verdict
   const routeChanged =
     Boolean(shot2) &&
-    shot1.route?.length > 0 &&
-    shot2.route?.length > 0 &&
+    (shot1.route?.length || 0) > 0 &&
+    (shot2.route?.length || 0) > 0 &&
     shot1.route.join('|') !== shot2.route.join('|')
   if (!shot1.state) verdict = 'no_ticket'
   else if (!shot2) verdict = 'inconclusive'
