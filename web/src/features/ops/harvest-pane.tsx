@@ -438,7 +438,7 @@ export function HarvestPane() {
                     <div
                       key={t.model}
                       className={cn(
-                        'flex cursor-pointer items-center gap-2 rounded-md border px-2 py-1 text-[11px]',
+                        'flex flex-col gap-0.5 rounded-lg border px-3 py-2 text-xs',
                         tier === '满血'
                           ? 'border-emerald-300/60 bg-emerald-50/60 dark:border-emerald-900 dark:bg-emerald-950/20'
                           : tier === '降智'
@@ -447,10 +447,11 @@ export function HarvestPane() {
                         running === key || probing === key ? 'ring-1 ring-primary/40' : '',
                       )}
                     >
-                      <span className='w-[118px] shrink-0 font-mono'>{t.model}</span>
+                      <span className='flex w-full items-center gap-2'>
+                        <span className='w-[132px] shrink-0 font-mono text-[12px] font-medium'>{t.model}</span>
                       <span
                         className={cn(
-                          'shrink-0 rounded px-1 text-[10px]',
+                          'shrink-0 rounded px-1.5 py-0.5 text-[10px]',
                           tier === '满血'
                             ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
                             : tier === '降智'
@@ -460,9 +461,25 @@ export function HarvestPane() {
                       >
                         {tier}
                       </span>
-                      <span className='flex-1 truncate text-[10px] text-muted-foreground'>
-                        {t.verdict === 'ok' ? `票 ${t.len ?? 0} 字 · ${remainingText(t)}` : t.verdict === 'absent' ? '上游未铸票' : '票异常'}
+                      <span className='flex-1 truncate text-[11px] text-muted-foreground'>
+                        {t.verdict === 'ok'
+                          ? `票 ${t.len ?? 0} 字 · ${remainingText(t)}`
+                          : t.verdict === 'absent'
+                            ? '上游未铸票'
+                            : '票异常'}
+                        {t.http_status ? ` · HTTP ${t.http_status}` : ''}
                         {running === key ? ' · 打票中…' : probing === key ? ' · 探针中…' : ''}
+                      </span>
+                      <span className='shrink-0 text-[10px] text-muted-foreground'>
+                        {t.checked_at ? fmtClock(t.checked_at) : '未采集'}
+                      </span>
+                      </span>
+                      {/* 第二行：硬事实，便于不用点开就判断 */}
+                      <span className='flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-[140px] text-[10px] text-muted-foreground'>
+                        <span>块数 {t.blocks ?? '—'}</span>
+                        <span>签发 {t.issued_at ? fmtClock(t.issued_at) : '—'}</span>
+                        <span>探针 {t.probe_at ? fmtClock(t.probe_at) : '未探针'}</span>
+                        {t.edge_ip ? <span>边缘 {t.edge_ip}</span> : null}
                       </span>
                     </div>
                   )
@@ -474,21 +491,21 @@ export function HarvestPane() {
                 <span className='mr-1 text-[10px] text-muted-foreground'>
                   按槽操作 · {a.models.length} 个模型
                 </span>
-                <Button size='sm' variant='outline' className='h-6 px-2 text-[11px]' disabled={batchBusy?.vmId === a.id}
+                <Button size='sm' variant='outline' className='h-8 px-3 text-xs' disabled={batchBusy?.vmId === a.id}
                   onClick={() => void runBatch(a.id, 'ticket')}>
-                  {batchBusy?.vmId === a.id && batchBusy.kind === 'ticket' ? <Loader2 className='mr-1 h-3 w-3 animate-spin' /> : <Play className='mr-1 h-3 w-3' />}打票
+                  {batchBusy?.vmId === a.id && batchBusy.kind === 'ticket' ? <Loader2 className='mr-1.5 h-3.5 w-3.5 animate-spin' /> : <Play className='mr-1.5 h-3.5 w-3.5' />}打票
                 </Button>
-                <Button size='sm' variant='outline' className='h-6 px-2 text-[11px]' disabled={batchBusy?.vmId === a.id}
+                <Button size='sm' variant='outline' className='h-8 px-3 text-xs' disabled={batchBusy?.vmId === a.id}
                   onClick={() => void runBatch(a.id, 'probe')}>
-                  <Activity className='mr-1 h-3 w-3' />探针
+                  <Activity className='mr-1.5 h-3.5 w-3.5' />探针
                 </Button>
-                <Button size='sm' variant='outline' className='h-6 px-2 text-[11px]' disabled={batchBusy?.vmId === a.id}
+                <Button size='sm' variant='outline' className='h-8 px-3 text-xs' disabled={batchBusy?.vmId === a.id}
                   onClick={() => void runBatch(a.id, 'borrow')}>
-                  <Handshake className='mr-1 h-3 w-3' />借票
+                  <Handshake className='mr-1.5 h-3.5 w-3.5' />借票
                 </Button>
-                <Button size='sm' variant='outline' className='h-6 px-2 text-[11px]' disabled={batchBusy?.vmId === a.id}
+                <Button size='sm' variant='outline' className='h-8 px-3 text-xs' disabled={batchBusy?.vmId === a.id}
                   onClick={() => void runBatch(a.id, 'candy')}>
-                  <Brain className='mr-1 h-3 w-3' />能力题
+                  <Brain className='mr-1.5 h-3.5 w-3.5' />能力题
                 </Button>
                 {batchBusy?.vmId === a.id ? (
                   <span className='ml-1 text-[10px] text-primary'>
