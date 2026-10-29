@@ -279,12 +279,12 @@ function LogRow({
 
   return (
     <>
-      <div className='min-w-[56px] flex-[0.6] truncate pr-1.5 pl-3 font-mono text-xs'>
+      <div className={cn(COL.time, 'truncate font-mono text-xs')}>
         <RelativeTime date={row.createdAt} fallback='-' />
       </div>
       {hidden('user') ? null : (
         <div
-          className='min-w-[48px] flex-[0.5] truncate px-2 text-[11px]'
+          className={cn(COL.user, 'truncate text-[11px]')}
           title={row.userName ?? undefined}
         >
           {row.userName || '-'}
@@ -292,14 +292,14 @@ function LogRow({
       )}
       {hidden('key') ? null : (
         <div
-          className='min-w-[76px] flex-[0.9] truncate px-2 font-mono text-[11px]'
+          className={cn(COL.key, 'truncate font-mono text-[11px]')}
           title={row.keyName ?? undefined}
         >
           {row.keyName || '-'}
         </div>
       )}
       {hidden('sessionId') ? null : (
-        <div className='min-w-[124px] flex-[1.2] px-2'>
+        <div className={COL.session}>
           {row.sessionId ? (
             <Tooltip delayDuration={300}>
               <TooltipTrigger asChild>
@@ -329,7 +329,7 @@ function LogRow({
         </div>
       )}
       {hidden('ip') ? null : (
-        <div className='min-w-[112px] flex-[1] overflow-hidden px-2'>
+        <div className={cn(COL.ip, 'overflow-hidden')}>
           {row.clientIp ? (
             <>
               <button
@@ -354,7 +354,7 @@ function LogRow({
         </div>
       )}
       {hidden('vm') && hidden('provider') ? null : (
-        <div className='min-w-[150px] flex-[1.7] px-1.5 font-mono text-xs'>
+        <div className={cn(COL.slot, 'font-mono text-xs')}>
           {row.vmName || row.vmId || row.providerName ? (
             <Tooltip delayDuration={250}>
               <TooltipTrigger asChild>
@@ -383,7 +383,7 @@ function LogRow({
           )}
         </div>
       )}
-      <div className='min-w-[150px] flex-[1.7] px-1.5 font-mono text-xs'>
+      <div className={cn(COL.model, 'font-mono text-xs')}>
         {/* 不再套一层「显示模型名」的 tooltip：它和降级行的 tooltip 会同时弹出。 */}
         <div className='flex min-w-0 items-center gap-1 truncate'>
           <ModelDisplayWithRedirect
@@ -393,7 +393,7 @@ function LogRow({
         </div>
       </div>
       {hidden('tokens') ? null : (
-        <div className='min-w-[86px] flex-[0.9] px-1.5 text-right font-mono text-xs'>
+        <div className={cn(COL.tokens, 'font-mono text-xs')}>
           <Tooltip delayDuration={250}>
             <TooltipTrigger asChild>
               <div className='flex cursor-help flex-col items-end leading-tight tabular-nums'>
@@ -426,7 +426,7 @@ function LogRow({
         </div>
       )}
       {hidden('cache') ? null : (
-        <div className='min-w-[70px] flex-[0.8] px-1.5 text-right font-mono text-xs'>
+        <div className={cn(COL.cache, 'font-mono text-xs')}>
           {(() => {
             const hasWrite = (row.cacheCreationInputTokens ?? 0) > 0
             const hasRead = (row.cacheReadInputTokens ?? 0) > 0
@@ -502,7 +502,7 @@ function LogRow({
         </div>
       )}
       {hidden('cost') ? null : (
-        <div className='min-w-[96px] flex-[0.9] px-1.5 text-right font-mono text-xs'>
+        <div className={cn(COL.cost, 'font-mono text-xs')}>
           {nonBilling || row.costUsd == null ? (
             '-'
           ) : (
@@ -544,7 +544,7 @@ function LogRow({
         </div>
       )}
       {hidden('performance') ? null : (
-        <div className='min-w-[104px] flex-[1] px-1.5 font-mono text-xs'>
+        <div className={cn(COL.performance, 'font-mono text-xs')}>
           <Tooltip delayDuration={250}>
             <TooltipTrigger asChild>
               <div
@@ -674,7 +674,7 @@ function LogRow({
           </Tooltip>
         </div>
       )}
-      <div className='min-w-[70px] flex-[0.7] truncate pr-3 pl-1.5 text-right'>
+      <div className={cn(COL.status, 'truncate')}>
         <Button
           type='button'
           variant='ghost'
@@ -718,6 +718,25 @@ function fullPriceUsd(row: UsageLogRow): number | null {
   const full = fullInput + outputCost
   return Number.isFinite(full) ? full : null
 }
+
+/**
+ * 列宽的唯一来源：表头和表体必须引用同一份，否则一改就错位。
+ * 顺序也要和渲染顺序一致。
+ */
+const COL = {
+  time: 'min-w-[56px] flex-[0.6] pr-1.5 pl-3',
+  user: 'min-w-[48px] flex-[0.5] px-2',
+  key: 'min-w-[76px] flex-[0.9] px-2',
+  session: 'min-w-[124px] flex-[1.2] px-2',
+  ip: 'min-w-[112px] flex-[1] px-2',
+  slot: 'min-w-[160px] flex-[1.8] px-1.5',
+  model: 'min-w-[130px] flex-[1.4] px-1.5',
+  tokens: 'min-w-[96px] flex-[0.9] px-1.5 text-right',
+  cache: 'min-w-[86px] flex-[0.8] px-1.5 text-right',
+  cost: 'min-w-[96px] flex-[0.9] px-1.5 text-right',
+  performance: 'min-w-[104px] flex-[1] px-1.5 text-right',
+  status: 'min-w-[70px] flex-[0.7] pr-3 pl-1.5 text-right',
+} as const
 
 export function VirtualizedLogsTable({
   filters,
@@ -836,51 +855,48 @@ export function VirtualizedLogsTable({
           {/* Same scrollbar gutter as the body below so flex columns resolve to the same widths. */}
           <div className='sticky top-0 z-10 [scrollbar-gutter:stable] overflow-y-hidden border-b bg-muted/30'>
             <div className='flex h-8 items-center text-[11px] font-medium tracking-wide text-muted-foreground/80'>
-              <HeadCell className='min-w-[56px] flex-[0.6] pr-1.5 pl-3'>
+              <HeadCell className={COL.time}>
                 时间
               </HeadCell>
               {isHidden('user') ? null : (
-                <HeadCell className='min-w-[48px] flex-[0.5] px-2'>用户</HeadCell>
+                <HeadCell className={COL.user}>用户</HeadCell>
               )}
               {isHidden('key') ? null : (
-                <HeadCell className='min-w-[76px] flex-[0.9] px-2'>密钥</HeadCell>
+                <HeadCell className={COL.key}>密钥</HeadCell>
               )}
               {isHidden('sessionId') ? null : (
-                <HeadCell
-                  className='min-w-[124px] flex-[1.2] px-2'
-                  title='实际发往上游的会话 id'
-                >
+                <HeadCell className={COL.session} title='实际发往上游的会话 id'>
                   出站 Session
                 </HeadCell>
               )}
               {isHidden('ip') ? null : (
-                <HeadCell className='min-w-[112px] flex-[1] px-2'>IP</HeadCell>
+                <HeadCell className={COL.ip}>IP</HeadCell>
               )}
               {isHidden('vm') && isHidden('provider') ? null : (
-                <HeadCell className='min-w-[150px] flex-[1.7]'>槽位 · 账号</HeadCell>
+                <HeadCell className={COL.slot}>槽位 · 账号</HeadCell>
               )}
-              <HeadCell className='min-w-[100px] flex-[1.3]'>计费模型</HeadCell>
+              <HeadCell className={COL.model}>计费模型</HeadCell>
               {isHidden('tokens') ? null : (
-                <HeadCell className='min-w-[70px] flex-[0.7] text-right'>
+                <HeadCell className={COL.tokens}>
                   Tokens
                 </HeadCell>
               )}
               {isHidden('cache') ? null : (
-                <HeadCell className='min-w-[70px] flex-[0.8] text-right'>
+                <HeadCell className={COL.cache}>
                   缓存
                 </HeadCell>
               )}
               {isHidden('cost') ? null : (
-                <HeadCell className='min-w-[96px] flex-[0.9] text-right'>
+                <HeadCell className={COL.cost}>
                   成本
                 </HeadCell>
               )}
               {isHidden('performance') ? null : (
-                <HeadCell className='min-w-[104px] flex-[1] text-right'>
+                <HeadCell className={COL.performance}>
                   性能
                 </HeadCell>
               )}
-              <HeadCell className='min-w-[70px] flex-[0.7] pr-3 pl-1.5 text-right'>
+              <HeadCell className={COL.status}>
                 状态
               </HeadCell>
             </div>
