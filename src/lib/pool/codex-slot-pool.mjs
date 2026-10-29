@@ -142,6 +142,8 @@ export function pickCodexSlots(vms, { pin = null, now = Date.now(), quotaPolicy 
     ready: ready.map((vm) => vm.id),
     parked: parked.map((vm) => vm.id),
     resting,
+    // 有槽位在活跃时段外时把「最早醒来时间」带出去，额度等待可以取两者的更早值。
+    ...(restUntil != null ? { restUntil } : {}),
   }
 }
 
@@ -338,9 +340,15 @@ export function orderCodexSessionSlots(
     const quotaResets = allQuota
       ? ids.map((id) => nextQuotaResetAt(byId.get(id), now)).filter((t) => Number.isFinite(t))
       : []
-    const retryAt = allQuota
-      ? quotaResets.length
-        ? Math.min(...quotaResets)
+    const restUntil = Number(picked.restUntil)
+    const quotaWait = quotaResets.length ? Math.min(...quotaResets) : null
+    // 额度重置和「活跃时段开始」哪个先到就告诉对端哪个，避免无意义空等。
+    const waits = [quotaWait, Number.isFinite(restUntil) && restUntil > now ? restUntil : null].filter(
+      (t) => Number.isFinite(t),
+    )
+    const retryAt = allQuota || allParked
+      ? waits.length
+        ? Math.min(...waits)
         : now + 15 * 60_000
       : rpmRetryAt(candidates, now) || holdRetryAt(candidates, now)
     return {
