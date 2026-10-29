@@ -90,18 +90,31 @@ function verdictPill(v?: string | null) {
  * - 数值题（糖果）→ 数字卡片 + 期望值对照
  * - 探针 → 结论与票长
  */
+/** 把产物包成无滚动条的文档：html/body 撑满、溢出裁掉、SVG 自适应。 */
+function wrapArtifact(artifact: string) {
+  const style =
+    '<style>html,body{margin:0;height:100%;overflow:hidden;background:#fafaf7}' +
+    'body{display:grid;place-items:center}' +
+    'svg,canvas,img{max-width:100%;max-height:100%;height:auto}' +
+    '::-webkit-scrollbar{display:none}html{scrollbar-width:none}</style>'
+  if (/<html[\s>]/i.test(artifact)) {
+    return /<head[\s>]/i.test(artifact)
+      ? artifact.replace(/<head([^>]*)>/i, `<head$1>${style}`)
+      : artifact.replace(/<html([^>]*)>/i, `<html$1><head>${style}</head>`)
+  }
+  return `<!doctype html><html><head>${style}</head><body>${artifact}</body></html>`
+}
+
 function renderArtifact(row: ResultRow) {
   const artifact = String(row.artifact || '')
   if (row.question_kind === 'image' || /<svg[\s>]/i.test(artifact)) {
-    const html = /<html[\s>]/i.test(artifact)
-      ? artifact
-      : `<!doctype html><html><body style="margin:0;display:grid;place-items:center;background:#fafaf7">${artifact}</body></html>`
     return (
       <iframe
         title={row.id}
         sandbox=''
-        srcDoc={html}
-        className='h-full w-full border-0 bg-white'
+        scrolling='no'
+        srcDoc={wrapArtifact(artifact)}
+        className='h-full w-full overflow-hidden border-0 bg-white'
         loading='lazy'
       />
     )
