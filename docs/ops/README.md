@@ -8,6 +8,12 @@
 | 降智检测 | [iq-detection.md](./iq-detection.md) | 能力是否下降（题库 + 鹈鹕结构指纹） | 设计完成，待实现 |
 | 缓存 | [cache.md](./cache.md) | 缓存命中与写入是否正常 | 采集已有，面板待做 |
 
+## 事故与复盘
+
+| 日期 | 事件 | 文档 |
+|---|---|---|
+| 2026-10-29 | 客户端持续重连（`stream closed before response.completed`） | [incidents/2026-10-29-sse-reconnect.md](./incidents/2026-10-29-sse-reconnect.md) |
+
 ## 设计原则
 
 1. **只读优先**：先观测、留证据，再谈自动动作。
