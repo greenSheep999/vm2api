@@ -723,6 +723,12 @@ export async function handleCodexProtocol({
     ops.streamCodexKernel ||
     (directMode
       ? async (args) => {
+          // 槽位级开关：transport.upstream === 'ws' 时走出站 WebSocket。
+          // WS 复用连接 + previous_response_id，实测缓存命中率和 TTFT 都更好。
+          const { wsTransportEnabled, streamCodexWsDirect } = await import('../transport/codex-ws-direct.mjs')
+          if (wsTransportEnabled(args?.exec?.vm || vm, routing)) {
+            return streamCodexWsDirect(args)
+          }
           const { streamCodexKernelDirect } = await import('../transport/codex-kernel-direct.mjs')
           return streamCodexKernelDirect(args)
         }

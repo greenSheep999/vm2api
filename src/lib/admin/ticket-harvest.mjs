@@ -675,18 +675,41 @@ export async function runCapabilityCheck({ vmId, model, questionId = 'candy', ed
   }
 }
 
-/** SSE 流里抽出模型输出的纯文本（只取 delta 文本，忽略事件行）。 */
+/**
+ * SSE 流里抽出模型输出的纯文本。
+ *
+ * 我们的 capture 会把 `event: xxx data: {...}` 拼在同一行里（没有换行），
+ * 所以不能按行判断前缀——必须按 `data:` 切分，并在下一个 `event:` 处截断。
+ * 旧实现按行解析失败后会回退成整段原始 SSE，导致产物里塞满事件行、
+ * 判卷找不到 <svg>/<path>，最后误判成 structure_missing。
+ */
 function extractText(preview) {
+  const raw = String(preview || '')
   const parts = []
-  for (const line of String(preview || '').split('\n')) {
-    if (!line.startsWith('data: ')) continue
+  for (const chunk of raw.split(/data:\s*/).slice(1)) {
+    const jsonText = chunk.split(/event:\s*/)[0].trim()
+    if (!jsonText.startsWith('{')) continue
     try {
-      const ev = JSON.parse(line.slice(6))
-      const text = ev?.delta?.text || ev?.text || ev?.response?.output_text
-      if (typeof text === 'string' && text) parts.push(text)
+      const ev = JSON.parse(jsonText)
+      // Responses 的 output_text.delta 里 delta 直接就是字符串；
+      // 别的形态（Anthropic 风格）才是 { type, text }。两种都要认。
+      const candidates = [
+        typeof ev?.delta === 'string' ? ev.delta : ev?.delta?.text,
+        ev?.text,
+        ev?.response?.output_text,
+        ev?.item?.content?.[0]?.text,
+      ]
+      for (const text of candidates) {
+        if (typeof text === 'string' && text) {
+          parts.push(text)
+          break
+        }
+      }
     } catch {}
   }
-  return parts.join('') || String(preview || '')
+  const joined = parts.join('')
+  // 只有真的解析出内容才用解析结果；否则仍是原始预览（保留可排查性）。
+  return joined || raw
 }
 
 /**
