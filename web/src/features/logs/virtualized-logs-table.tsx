@@ -438,31 +438,23 @@ function LogRow({
               <Tooltip delayDuration={250}>
                 <TooltipTrigger asChild>
                   <div className='flex cursor-help flex-col items-end leading-tight tabular-nums'>
-                    {hasWrite ? (
-                      <div className='flex w-full items-center gap-1'>
+                    {/* 缓存 token 量已经在 Tokens 列第二行显示，这里只放命中率和全价，
+                        避免同一份数据在两列重复。 */}
+                    {hits != null ? (
+                      <span className='flex items-center gap-1 text-xs'>
+                        <span className={hitRateToneClass(hits)}>{hits}%</span>
                         {row.cacheTtlApplied ? (
                           <Badge variant='outline' className={TTL_BADGE}>
                             {row.cacheTtlApplied}
                           </Badge>
                         ) : null}
-                        <span className='ml-auto'>
-                          {formatTokenAmount(row.cacheCreationInputTokens)}
-                        </span>
-                      </div>
-                    ) : null}
-                    {hasRead ? (
-                      <span className='text-muted-foreground'>
-                        {formatTokenAmount(row.cacheReadInputTokens)}
                       </span>
-                    ) : null}
-                    {hits != null ? (
-                      <span className='flex items-center gap-1 text-[10px]'>
-                        <span className={hitRateToneClass(hits)}>{hits}%</span>
-                        {row.costUsd != null ? (
-                          <span className='text-muted-foreground'>
-                            全价 ${Number(row.costUsd).toFixed(4)}
-                          </span>
-                        ) : null}
+                    ) : (
+                      <span className='text-muted-foreground'>—</span>
+                    )}
+                    {row.costUsd != null ? (
+                      <span className='text-[10px] text-muted-foreground'>
+                        全价 ${Number(row.costUsd).toFixed(4)}
                       </span>
                     ) : null}
                   </div>
