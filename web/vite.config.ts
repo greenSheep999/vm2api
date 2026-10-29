@@ -42,7 +42,7 @@ function previewOpsAcl() {
     }
   }
 
-  const OPS_VIEWS = ['ops', 'ops/ticket', 'ops/iq', 'ops/cache', 'ops/sched']
+  const OPS_VIEWS = ['ops', 'ops/ticket', 'ops/iq', 'ops/cache', 'ops/sched', 'ops/results']
 
   return {
     name: 'preview-ops-acl',

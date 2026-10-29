@@ -186,8 +186,8 @@ export async function runTask({ projectRoot, task, model: modelOverride = null }
     const ok = result?.ok === true || verdict === 'pass' || verdict === 'recorded'
     db()
       .prepare(
-        `INSERT INTO iq_task_runs (id, task_id, vm_id, model, verdict, answer, expected, detail, ok, started_at, finished_at, duration_ms)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO iq_task_runs (id, task_id, vm_id, model, verdict, answer, expected, detail, artifact, ok, started_at, finished_at, duration_ms, source, question_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'task', ?)`,
       )
       .run(
         `run_${crypto.randomBytes(8).toString('hex')}`,
@@ -198,10 +198,12 @@ export async function runTask({ projectRoot, task, model: modelOverride = null }
         result?.answer ?? null,
         result?.expected ?? null,
         String(result?.reason || result?.detail || '').slice(0, 300),
+        String(result?.text || '').slice(0, 200_000),
         ok ? 1 : 0,
         startedAt,
         nowIso(),
         Date.now() - t0,
+        task.question_id || task.kind,
       )
     results.push({ vm_id: vmId, verdict, answer: result?.answer ?? null, ok })
   }
@@ -291,8 +293,8 @@ export async function runSingleCheck({ projectRoot, scopeType = 'slot', scopeIds
       }
       db()
         .prepare(
-          `INSERT INTO iq_task_runs (id, task_id, vm_id, model, verdict, answer, expected, detail, ok, started_at, finished_at, duration_ms, source, question_id, effort, tokens)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO iq_task_runs (id, task_id, vm_id, model, verdict, answer, expected, detail, artifact, ok, started_at, finished_at, duration_ms, source, question_id, effort, tokens)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           `run_${crypto.randomBytes(8).toString('hex')}`,
@@ -302,7 +304,8 @@ export async function runSingleCheck({ projectRoot, scopeType = 'slot', scopeIds
           result?.verdict || 'unknown',
           result?.answer ?? null,
           result?.expected ?? null,
-          String(result?.reason || result?.text || '').slice(0, 300),
+          String(result?.reason || '').slice(0, 300),
+          String(result?.text || '').slice(0, 200_000),
           result?.ok ? 1 : 0,
           startedAt,
           nowIso(),
@@ -332,7 +335,7 @@ export function listResults({ kind = null, limit = 200 } = {}) {
   try {
     rows = db()
       .prepare(
-        `SELECT r.*, q.kind AS question_kind, q.title AS question_title
+        `SELECT r.*, q.kind AS question_kind, q.title AS question_title, q.judge_rule
            FROM iq_task_runs r
            LEFT JOIN iq_questions q ON q.id = r.question_id
           ORDER BY r.started_at DESC LIMIT ?`,

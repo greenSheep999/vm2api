@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate } from '@tanstack/react-router'
-import { ArrowUpRight, Grid2x2, List, Loader2 } from 'lucide-react'
+import { Grid2x2, List, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
 import { api } from '@/lib/api'
@@ -22,6 +21,8 @@ type ResultRow = {
   source: string | null
   started_at: string
   duration_ms: number | null
+  artifact?: string | null
+  judge_rule?: string | null
   keys: Array<{ id: string; name: string }>
 }
 
@@ -56,12 +57,74 @@ function tone(v?: string | null) {
   return 'text-amber-600 dark:text-amber-400'
 }
 
+function verdictLabel(row: ResultRow) {
+  const v = row.verdict
+  if (v === 'pass') return '通过'
+  if (v === 'fail') return '未通过'
+  if (v === 'structure_ok') return '结构正常'
+  if (v === 'structure_missing') return '无结构'
+  if (v === 'recorded') return '已记录'
+  if (v === 'healthy' || v === 'healthy_same') return '满血'
+  if (v === 'degraded') return '降智'
+  if (v === 'route_changed') return '路由漂移'
+  if (v === 'no_ticket') return '无票'
+  return v || '—'
+}
+
+function verdictPill(v?: string | null) {
+  if (!v) return 'bg-muted text-muted-foreground'
+  if (['pass', 'structure_ok', 'recorded', 'healthy', 'healthy_same'].includes(v)) {
+    return 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+  }
+  if (['fail', 'structure_missing', 'degraded', 'route_changed', 'no_ticket', 'no_answer'].includes(v)) {
+    return 'bg-rose-500/15 text-rose-700 dark:text-rose-300'
+  }
+  return 'bg-amber-500/15 text-amber-700 dark:text-amber-300'
+}
+
+/**
+ * 直接渲染产物：
+ * - 结构题（鹈鹕）→ 沙箱 iframe 渲染 HTML/SVG
+ * - 数值题（糖果）→ 数字卡片 + 期望值对照
+ * - 探针 → 结论与票长
+ */
+function renderArtifact(row: ResultRow) {
+  const artifact = String(row.artifact || '')
+  if (row.question_kind === 'image' || /<svg[\s>]/i.test(artifact)) {
+    const html = /<html[\s>]/i.test(artifact)
+      ? artifact
+      : `<!doctype html><html><body style="margin:0;display:grid;place-items:center;background:#fafaf7">${artifact}</body></html>`
+    return (
+      <iframe
+        title={row.id}
+        sandbox=''
+        srcDoc={html}
+        className='h-44 w-full border-0 bg-white'
+        loading='lazy'
+      />
+    )
+  }
+  if (row.question_kind === 'numeric') {
+    const ok = row.verdict === 'pass'
+    return (
+      <div className={cn('flex h-24 items-center justify-center font-mono text-3xl font-semibold', ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
+        {row.answer ?? '—'}
+        {row.expected != null ? <span className='ml-2 text-sm text-muted-foreground'>/ {row.expected}</span> : null}
+      </div>
+    )
+  }
+  return (
+    <div className='flex h-24 items-center justify-center px-3 text-center font-mono text-[11px] text-muted-foreground'>
+      {row.verdict || '—'}
+    </div>
+  )
+}
+
 /**
  * 智商测试结果：只展示成果，不提供策略入口。
  * 按 Key 聚合，可按题型筛选，支持网格与列表两种视图。
  */
 export function IqResultsPage() {
-  const navigate = useNavigate()
   const [kind, setKind] = useState<string>('all')
   const [view, setView] = useState<'grid' | 'list'>('grid')
   const [keyId, setKeyId] = useState<string>('all')
@@ -171,42 +234,42 @@ export function IqResultsPage() {
           还没有检测结果 —— 去「智能运营 → 降智检测」跑一次单次检测或定时任务
         </div>
       ) : view === 'grid' ? (
-        <div className='grid gap-3 md:grid-cols-2 xl:grid-cols-3'>
-          {groups.map((group) => (
-            <div key={group.id} className={CARD}>
-              <div className='flex items-center justify-between'>
+        <div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'>
+          {filtered.map((row) => (
+            <div key={row.id} className='overflow-hidden rounded-xl border bg-card'>
+              <div className='flex items-start justify-between px-3 pt-2.5'>
                 <div className='min-w-0'>
-                  <div className='truncate text-sm font-semibold'>{group.label}</div>
-                  <div className='text-[11px] text-muted-foreground'>{group.rows.length} 条结果</div>
-                </div>
-                <Button
-                  size='sm'
-                  variant='ghost'
-                  className='h-6 px-1.5 text-[10px]'
-                  onClick={() => void navigate({ to: '/ops/$tab', params: { tab: 'iq' } })}
-                >
-                  去检测
-                  <ArrowUpRight className='ml-0.5 h-3 w-3' />
-                </Button>
-              </div>
-              <div className='mt-2 space-y-1'>
-                {group.rows.slice(0, 8).map((row) => (
-                  <div key={row.id} className='flex items-center gap-2 border-b py-1 font-mono text-[11px] last:border-0'>
-                    <span className='shrink-0'>{row.vm_id}</span>
-                    <span className='shrink-0 rounded bg-muted px-1 text-[10px]'>
-                      {KIND_LABEL[row.question_kind || row.question_id || ''] || row.question_id || '—'}
-                    </span>
-                    <span className={cn('shrink-0', tone(row.verdict))}>{row.verdict || '—'}</span>
-                    {row.answer != null ? (
-                      <span className={cn('shrink-0', tone(row.verdict))}>
-                        {row.answer}/{row.expected ?? '—'}
-                      </span>
-                    ) : null}
-                    <span className='flex-1 truncate text-right text-muted-foreground'>
-                      {fmt(row.started_at)}
-                    </span>
+                  <div className='truncate font-mono text-[11px]'>
+                    {row.keys.map((k) => k.name || k.id).join(', ') || '未绑定 Key'}
                   </div>
-                ))}
+                  <div className='mt-0.5 flex items-center gap-1.5 font-mono text-[10px] text-muted-foreground'>
+                    <span>{row.vm_id}</span>
+                    <span>·</span>
+                    <span>{KIND_LABEL[row.question_kind || row.question_id || ''] || row.question_id}</span>
+                    {row.model ? (
+                      <>
+                        <span>·</span>
+                        <span>{row.model}</span>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+                <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px]', verdictPill(row.verdict))}>
+                  {verdictLabel(row)}
+                </span>
+              </div>
+
+              <div className='mt-2'>
+                {renderArtifact(row)}
+              </div>
+
+              <div className='flex items-center justify-between px-3 py-2 font-mono text-[10px] text-muted-foreground'>
+                <span>{fmt(row.started_at)}</span>
+                <span>
+                  {row.answer != null ? `答 ${row.answer}${row.expected != null ? `/${row.expected}` : ''}` : '—'}
+                  {' · '}
+                  {row.duration_ms ? `${Math.round(row.duration_ms / 100) / 10}s` : '—'}
+                </span>
               </div>
             </div>
           ))}

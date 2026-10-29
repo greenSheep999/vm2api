@@ -32,6 +32,8 @@ export const PANEL_VIEWS = [
   'ops/iq',
   'ops/cache',
   'ops/sched',
+  // 结果页独立视图：缺了它「智商测试结果」会在侧栏被过滤掉。
+  'ops/results',
 ]
 
 const ROLE_VIEWS = {

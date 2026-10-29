@@ -619,7 +619,12 @@ export async function runCapabilityCheck({ vmId, model, questionId = 'candy', ed
     proxy: proxyUrl,
     edge_ip: edgeIp,
   })
-  return { ok: judged.verdict === 'pass' || judged.verdict === 'recorded', ...judged, http: shot.status }
+  return {
+    ok: judged.verdict === 'pass' || judged.verdict === 'recorded' || judged.verdict === 'structure_ok',
+    ...judged,
+    http: shot.status,
+    text: extractText(shot.preview),
+  }
 }
 
 /** SSE 流里抽出模型输出的纯文本（只取 delta 文本，忽略事件行）。 */

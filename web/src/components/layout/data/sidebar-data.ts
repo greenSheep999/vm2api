@@ -46,7 +46,7 @@ const ALL_GROUPS: NavGroup[] = [
     items: [
       // 左栏只留入口；打票/降智/缓存/调度都在页内右侧分区切换。
       { title: '智能运营', url: '/ops', icon: Workflow },
-      { title: '降智结果', url: '/ops/results', icon: Brain },
+      { title: '智商测试结果', url: '/ops/results', icon: Brain },
     ],
   },
   {
