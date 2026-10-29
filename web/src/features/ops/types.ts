@@ -44,6 +44,9 @@ export type OpsTicketPolicy = {
   overflow_to_any_plan: boolean
   edge_auto: boolean
   edge_auto_interval_seconds: number
+  fingerprint_mode: 'off' | 'device' | 'session' | 'full'
+  allow_official_only: boolean
+  compact_mode: 'auto' | 'on' | 'off'
 }
 
 export type OpsIqResult = {

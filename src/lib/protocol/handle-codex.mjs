@@ -728,6 +728,23 @@ export async function handleCodexProtocol({
   // KIN_CODEX_DIRECT=1 时绕过预编译 kernel，由 Node 直连上游：
   // 只有这条路能把 originator / version / OpenAI-Beta 真正发出去，
   // 上游才会铸 x-codex-turn-state。
+  // 仅允许 Codex 官方客户端：槽位打开后，非 codex 的 originator/UA 直接拒，
+  // 避免第三方 SDK 把「非官方流量」带到这个账号上。
+  if (routing?.codex?.ticket?.allow_official_only === true) {
+    const look = (name) => String(req?.headers?.[name] || '').toLowerCase()
+    const originator = look('originator')
+    const ua = look('user-agent')
+    const looksOfficial = /codex/.test(originator) || /codex/.test(ua)
+    if (!looksOfficial) {
+      return json(res, 403, {
+        error: {
+          type: 'invalid_request_error',
+          code: 'official_client_only',
+          message: '该账号仅允许 Codex 官方客户端访问',
+        },
+      })
+    }
+  }
   const directMode = routing?.codex?.direct === true || process.env.KIN_CODEX_DIRECT === '1'
   const hop =
     ops.streamCodexKernel ||

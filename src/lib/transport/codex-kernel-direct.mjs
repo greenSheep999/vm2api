@@ -164,6 +164,31 @@ function buildHeaders(args, token) {
   for (const [name, value] of Object.entries(IDENTITY)) {
     if (!headers[name]) headers[name] = value
   }
+  // 指纹收敛：多人共用同一 OAuth 账号时，把设备/会话标识收敛成账号级恒定值，
+  // 减少上游能看到的设备数与会话数。默认 off（原样透传）。
+  const fpMode =
+    args?.exec?.vm?.codex?.fingerprint_mode ||
+    args?.exec?.vm?.fingerprint_mode ||
+    'off'
+  const accountKey = String(args?.exec?.vm?.id || 'slot')
+  if (fpMode === 'device' || fpMode === 'session' || fpMode === 'full') {
+    headers['user-agent'] = DEFAULT_UA
+    headers['x-codex-window-id'] = `${accountKey}:0`
+  }
+  if (fpMode === 'session' || fpMode === 'full') {
+    headers['session-id'] = accountKey
+    headers['thread-id'] = accountKey
+    headers['session_id'] = accountKey
+  }
+  if (fpMode === 'full') {
+    headers['x-codex-turn-metadata'] = JSON.stringify({
+      session_id: accountKey,
+      thread_id: accountKey,
+      window_id: `${accountKey}:0`,
+      request_kind: 'real',
+    })
+    for (const name of ['x-codex-parent-thread-id', 'x-client-request-id']) delete headers[name]
+  }
   const ticket = ticketFor(args)
   if (ticket?.state && !headers['x-codex-turn-state']) {
     headers['x-codex-turn-state'] = ticket.state

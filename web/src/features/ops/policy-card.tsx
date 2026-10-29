@@ -7,6 +7,13 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
@@ -306,6 +313,54 @@ export function PolicyCard({ policy }: { policy: OpsTicketPolicy }) {
             </span>
           </span>
         </label>
+        <div className='space-y-1.5 rounded-md border p-2.5 text-xs'>
+          <Label className='text-xs'>指纹收敛</Label>
+          <Select
+            value={draft.fingerprint_mode}
+            onValueChange={(value) => patch({ fingerprint_mode: value as never })}
+          >
+            <SelectTrigger className='h-8 text-xs'>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value='off' className='text-xs'>关闭（透传，默认）</SelectItem>
+              <SelectItem value='device' className='text-xs'>仅设备</SelectItem>
+              <SelectItem value='session' className='text-xs'>设备 + 会话</SelectItem>
+              <SelectItem value='full' className='text-xs'>完全收敛</SelectItem>
+            </SelectContent>
+          </Select>
+          <p className='text-[11px] text-muted-foreground'>
+            多人共号时把设备/会话标识收敛为账号恒定值。收敛可能影响额度，按实测选择。
+          </p>
+        </div>
+        <label className='flex items-start gap-2 rounded-md border p-2.5 text-xs'>
+          <Switch
+            checked={draft.allow_official_only}
+            onCheckedChange={(allow_official_only) => patch({ allow_official_only })}
+          />
+          <span>
+            <span className='font-medium'>仅允许 Codex 官方客户端</span>
+            <span className='mt-0.5 block text-[11px] text-muted-foreground'>
+              开启后 originator / User-Agent 不是 codex 的请求直接拒（403）。
+            </span>
+          </span>
+        </label>
+        <div className='space-y-1.5 rounded-md border p-2.5 text-xs'>
+          <Label className='text-xs'>Compact 模式</Label>
+          <Select
+            value={draft.compact_mode}
+            onValueChange={(value) => patch({ compact_mode: value as never })}
+          >
+            <SelectTrigger className='h-8 text-xs'>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value='auto' className='text-xs'>自动（跟随探测）</SelectItem>
+              <SelectItem value='on' className='text-xs'>强制允许</SelectItem>
+              <SelectItem value='off' className='text-xs'>强制排除</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <label className='flex items-start gap-2 rounded-md border p-2.5 text-xs'>
           <Switch
             checked={draft.overflow_to_any_plan}

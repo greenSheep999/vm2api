@@ -119,6 +119,11 @@ export function normalizeCodexTicketPolicy(raw = {}) {
     auto_park: src.auto_park === true,
     inject: src.inject === true,
     probe_routing: src.probe_routing === true,
+    fingerprint_mode: ['off', 'device', 'session', 'full'].includes(src.fingerprint_mode)
+      ? src.fingerprint_mode
+      : 'off',
+    allow_official_only: src.allow_official_only === true,
+    compact_mode: ['auto', 'on', 'off'].includes(src.compact_mode) ? src.compact_mode : 'auto',
     edge_auto: src.edge_auto !== false,
     edge_auto_interval_seconds: int(src.edge_auto_interval_seconds, 600, 60, 86_400),
     overflow_to_any_plan: src.overflow_to_any_plan === true,
