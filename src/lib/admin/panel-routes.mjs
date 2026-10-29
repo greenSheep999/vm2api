@@ -2777,14 +2777,19 @@ export function createPanelHandler(ctx) {
         if (!targets.ok) return json(res, 400, { ok: false, error: { message: targets.error } })
         const has = (key) => Object.prototype.hasOwnProperty.call(body, key)
         const hasWeight = has('weight')
+        // 上游传输方式（ws/http）也允许走批量入口，和单槽 PATCH 保持一致。
+        const hasTransport = has('transport')
         const hasLevel = has('schedule_level')
         const hasConc = has('max_concurrency')
         const hasRpm = has('max_rpm')
         const hasSessions = has('max_sessions')
-        if (!hasWeight && !hasLevel && !hasConc && !hasRpm && !hasSessions) {
+        if (!hasWeight && !hasLevel && !hasConc && !hasRpm && !hasSessions && !hasTransport) {
           return json(res, 400, {
             ok: false,
-            error: { message: 'weight, schedule_level, max_concurrency, max_rpm or max_sessions required' },
+            error: {
+              message:
+                'weight, schedule_level, max_concurrency, max_rpm, max_sessions or transport required',
+            },
           })
         }
         // null (or '') unpins a slot: weight goes back to the default 1,
@@ -3042,13 +3047,14 @@ export function createPanelHandler(ctx) {
           !hasTimezone &&
           !hasWeight &&
           !hasMemory &&
+          !hasTransport &&
           !followProxyTz
         ) {
           return json(res, 400, {
             ok: false,
             error: {
               message:
-                'max_concurrency, max_rpm, max_sessions, session_slots, quota_override, allowed_models, auth_scheme, inference_engine, persona_preset, schedule_level, active_hours, timezone, weight, machine.memory or timezone_follow_proxy required',
+                'max_concurrency, max_rpm, max_sessions, session_slots, quota_override, allowed_models, auth_scheme, inference_engine, persona_preset, schedule_level, active_hours, timezone, weight, transport, machine.memory or timezone_follow_proxy required',
             },
           })
         }
