@@ -383,14 +383,14 @@ function LogRow({
           )}
         </div>
       )}
-      <div className={cn(COL.endpoint, 'font-mono text-[11px] leading-tight')}>
+      <div className={cn(COL.endpoint, 'font-mono text-[10px] leading-tight')}>
         {/* 入站 = 客户端打进来的路径；上游 = 我们实际发出去的路径 */}
         <div className='truncate'>
-          <span className='text-muted-foreground'>入站 </span>
+          <span className='text-[9px] text-muted-foreground'>入站 </span>
           {row.endpoint || '—'}
         </div>
         <div className='truncate text-muted-foreground'>
-          <span className='text-muted-foreground'>上游 </span>
+          <span className='text-[9px] text-muted-foreground'>上游 </span>
           {row.upstreamEndpoint || '—'}
         </div>
       </div>
