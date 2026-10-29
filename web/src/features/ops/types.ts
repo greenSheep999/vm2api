@@ -41,6 +41,7 @@ export type OpsTicketPolicy = {
   auto_park: boolean
   inject: boolean
   probe_routing: boolean
+  overflow_to_any_plan: boolean
 }
 
 export type OpsIqResult = {

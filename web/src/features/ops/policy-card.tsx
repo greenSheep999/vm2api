@@ -187,6 +187,19 @@ export function PolicyCard({ policy }: { policy: OpsTicketPolicy }) {
         </label>
         <label className='flex items-start gap-2 rounded-md border p-2.5 text-xs'>
           <Switch
+            checked={draft.overflow_to_any_plan}
+            onCheckedChange={(overflow_to_any_plan) => patch({ overflow_to_any_plan })}
+          />
+          <span>
+            <span className='font-medium'>额度耗尽时溢出到其它套餐</span>
+            <span className='mt-0.5 block text-[11px] text-muted-foreground'>
+              默认关闭。开启后本 key 范围内的账号全部没额度时，会借用其它套餐的槽位，
+              计费归属和套餐承诺会错位，正常情况下不应该发生。
+            </span>
+          </span>
+        </label>
+        <label className='flex items-start gap-2 rounded-md border p-2.5 text-xs'>
+          <Switch
             checked={draft.probe_routing}
             onCheckedChange={(probe_routing) => patch({ probe_routing })}
           />

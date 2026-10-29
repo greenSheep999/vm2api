@@ -54,8 +54,12 @@ export const DEFAULT_CODEX_TICKET = Object.freeze({
   inject: false,
   /** 调度时按探针结论排序：healthy 优先，降智垫底（默认关闭）。 */
   probe_routing: false,
-  /** 本 key 范围全无额度时，允许溢出到其它套餐的槽位（默认开启，否则会卡死）。 */
-  overflow_to_any_plan: true,
+  /**
+   * 本 key 范围全无额度时，是否允许溢出到其它套餐的槽位。
+   * 默认关闭：跨套餐借用会让计费归属和套餐承诺错位，正常情况下不应该发生。
+   * 只有明确要「宁可跨套餐也别失败」时才打开。
+   */
+  overflow_to_any_plan: false,
 })
 
 export function normalizeCodexTicketPolicy(raw = {}) {
@@ -115,7 +119,7 @@ export function normalizeCodexTicketPolicy(raw = {}) {
     auto_park: src.auto_park === true,
     inject: src.inject === true,
     probe_routing: src.probe_routing === true,
-    overflow_to_any_plan: src.overflow_to_any_plan !== false,
+    overflow_to_any_plan: src.overflow_to_any_plan === true,
     edge_ips: Array.isArray(src.edge_ips)
       ? src.edge_ips
           .map((ip) => String(ip || '').trim())
