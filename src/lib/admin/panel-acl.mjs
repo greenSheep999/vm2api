@@ -26,6 +26,12 @@ export const PANEL_VIEWS = [
   'users',
   'wrap',
   'billing',
+  // 智能运营四个分区：侧栏按 me.views 过滤，缺一项整组都会消失。
+  'ops',
+  'ops/ticket',
+  'ops/iq',
+  'ops/cache',
+  'ops/sched',
 ]
 
 const ROLE_VIEWS = {
