@@ -591,6 +591,8 @@ export function createHandleProtocol(deps) {
       cache_continuity: null,
       vm_id: null,
       account_id: null,
+      // 上游真实路径：直连 hop 与内核转发的路径不同，落库后日志页才能一眼看出走了哪条链路。
+      upstream_path: null,
       workspace: 'client',
       has_tools: null,
       usage: null,

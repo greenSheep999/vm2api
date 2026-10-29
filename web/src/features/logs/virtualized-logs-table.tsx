@@ -383,6 +383,17 @@ function LogRow({
           )}
         </div>
       )}
+      <div className={cn(COL.endpoint, 'font-mono text-[11px] leading-tight')}>
+        {/* 入站 = 客户端打进来的路径；上游 = 我们实际发出去的路径 */}
+        <div className='truncate'>
+          <span className='text-muted-foreground'>入站 </span>
+          {row.endpoint || '—'}
+        </div>
+        <div className='truncate text-muted-foreground'>
+          <span className='text-muted-foreground'>上游 </span>
+          {row.upstreamEndpoint || '—'}
+        </div>
+      </div>
       <div className={cn(COL.model, 'font-mono text-xs')}>
         {/* 不再套一层「显示模型名」的 tooltip：它和降级行的 tooltip 会同时弹出。 */}
         <div className='flex min-w-0 items-center gap-1 truncate'>
@@ -731,6 +742,7 @@ const COL = {
   ip: 'min-w-[112px] flex-[1] px-2',
   slot: 'min-w-[160px] flex-[1.8] px-1.5',
   model: 'min-w-[130px] flex-[1.4] px-1.5',
+  endpoint: 'min-w-[150px] flex-[1.6] px-1.5',
   tokens: 'min-w-[96px] flex-[0.9] px-1.5 text-right',
   cache: 'min-w-[86px] flex-[0.8] px-1.5 text-right',
   cost: 'min-w-[96px] flex-[0.9] px-1.5 text-right',
@@ -875,6 +887,7 @@ export function VirtualizedLogsTable({
               {isHidden('vm') && isHidden('provider') ? null : (
                 <HeadCell className={COL.slot}>槽位 · 账号</HeadCell>
               )}
+              <HeadCell className={COL.endpoint}>请求端点</HeadCell>
               <HeadCell className={COL.model}>计费模型</HeadCell>
               {isHidden('tokens') ? null : (
                 <HeadCell className={COL.tokens}>

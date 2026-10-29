@@ -128,6 +128,8 @@ export type UsageLogRow = {
   modelMismatch: number | null
   /** 入站路径，例如 `/v1/messages`。 */
   endpoint: string | null
+  /** 实际发往上游的路径（直连 hop 与内核转发不同）。 */
+  upstreamEndpoint?: string | null
   protocol: string | null
   method: string | null
   statusCode: number | null

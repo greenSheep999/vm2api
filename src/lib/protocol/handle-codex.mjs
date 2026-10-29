@@ -647,6 +647,7 @@ export async function handleCodexProtocol({
   if (!allowed.ok) {
     stats.errors++
     logBag.via = 'codex-kernel'
+    logBag.upstream_path = '/v1/responses'
     logBag.error_code = allowed.code
     return json(res, 400, {
       error: {
@@ -748,6 +749,8 @@ export async function handleCodexProtocol({
   const sameRetryDelayMs =
     Number.isFinite(sameRetryDelay) && sameRetryDelay >= 0 ? Math.min(10_000, sameRetryDelay) : 100
   logBag.via = directMode ? 'codex-direct' : 'codex-kernel'
+  // 直连 hop 走 /backend-api/codex/responses；内核转发走网关的 /v1/responses。
+  logBag.upstream_path = directMode ? '/backend-api/codex/responses' : '/v1/responses'
   logBag.attempt_count = 0
   let last = null
   let hops = 0

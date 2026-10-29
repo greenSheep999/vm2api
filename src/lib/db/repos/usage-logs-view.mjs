@@ -192,6 +192,7 @@ export function toUsageLogRow(row, names, chain = []) {
     turnStateIssuedAt: row.turn_state_issued_at ?? null,
     modelMismatch: row.model_mismatch == null ? null : Number(row.model_mismatch),
     endpoint: row.path ?? null,
+    upstreamEndpoint: row.upstream_path ?? null,
     protocol: row.protocol ?? null,
     method: row.method ?? null,
     statusCode: nullableNum(row.status),
