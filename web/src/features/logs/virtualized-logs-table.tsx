@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import type { UsageLogFilters, UsageLogRow } from '@/types/panel-usage-logs'
-import { ArrowUp, Loader2, Wrench } from 'lucide-react'
+import { ArrowDown, ArrowUp, Database, Loader2, Wrench } from 'lucide-react'
 import {
   calculateOutputRate,
   formatCurrency,
@@ -393,28 +393,34 @@ function LogRow({
         </div>
       </div>
       {hidden('tokens') ? null : (
-        <div className='min-w-[70px] flex-[0.7] px-1.5 text-right font-mono text-xs'>
+        <div className='min-w-[86px] flex-[0.9] px-1.5 text-right font-mono text-xs'>
           <Tooltip delayDuration={250}>
             <TooltipTrigger asChild>
               <div className='flex cursor-help flex-col items-end leading-tight tabular-nums'>
-                <span>{formatTokenAmount(row.inputTokens)}</span>
-                <span className='text-muted-foreground'>
-                  {formatTokenAmount(row.outputTokens)}
+                {/* 输入用上箭头、输出用下箭头，一眼区分方向 */}
+                <span className='flex items-center gap-1.5'>
+                  <span className='flex items-center gap-0.5'>
+                    <ArrowUp className='h-3 w-3 text-sky-600 dark:text-sky-400' />
+                    {formatTokenAmount(row.inputTokens)}
+                  </span>
+                  <span className='flex items-center gap-0.5'>
+                    <ArrowDown className='h-3 w-3 text-violet-600 dark:text-violet-400' />
+                    {formatTokenAmount(row.outputTokens)}
+                  </span>
+                </span>
+                {/* 第二行：缓存读取量，带图标 */}
+                <span className='flex items-center gap-1 text-[10px] text-muted-foreground'>
+                  <Database className='h-3 w-3' />
+                  {formatTokenAmount(row.cacheReadInputTokens)}
                 </span>
               </div>
             </TooltipTrigger>
             <TooltipContent align='end' className='w-[186px] space-y-1'>
-              <TipKV label='输入' value={formatTokenAmount(row.inputTokens)} />
+              <TipKV label='输入（全价部分）' value={formatTokenAmount(row.inputTokens)} />
               <TipKV label='输出' value={formatTokenAmount(row.outputTokens)} />
-              <TipKV
-                label='缓存读取'
-                value={formatTokenAmount(row.cacheReadInputTokens)}
-              />
+              <TipKV label='缓存读取' value={formatTokenAmount(row.cacheReadInputTokens)} />
               <TipDivider />
-              <TipKV
-                label='总 tokens'
-                value={formatTokenAmount(row.totalTokens)}
-              />
+              <TipKV label='总 tokens' value={formatTokenAmount(row.totalTokens)} />
             </TooltipContent>
           </Tooltip>
         </div>
@@ -450,9 +456,13 @@ function LogRow({
                       </span>
                     ) : null}
                     {hits != null ? (
-                      <span className='text-[10px]'>
-                        <span className='text-muted-foreground'>命中 </span>
+                      <span className='flex items-center gap-1 text-[10px]'>
                         <span className={hitRateToneClass(hits)}>{hits}%</span>
+                        {row.costUsd != null ? (
+                          <span className='text-muted-foreground'>
+                            全价 ${Number(row.costUsd).toFixed(4)}
+                          </span>
+                        ) : null}
                       </span>
                     ) : null}
                   </div>
