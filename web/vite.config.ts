@@ -60,10 +60,23 @@ function previewOpsAcl() {
           if (hitIq && req.method === 'GET') {
             const now = Date.now()
             const qs = [
-              { id: 'candy', title: '糖果计数', kind: 'numeric', prompt: '…糖果题原文…', judge_rule: 'numeric_pass', expected: '21', auto_support: 1, builtin: 1 },
-              { id: 'poker', title: '扑克翻牌', kind: 'numeric', prompt: '…扑克题原文…', judge_rule: 'record_only', expected: null, auto_support: 0, builtin: 1 },
-              { id: 'pelican-bike', title: '鹈鹕骑自行车', kind: 'image', prompt: '…SVG 动画…', judge_rule: 'structure', expected: null, auto_support: 0, builtin: 1 },
-            ]
+              ['candy', '糖果计数', 'numeric', 'numeric_pass', '21'],
+              ['pelican-bike', '鹈鹕骑自行车', 'image', 'structure', null],
+              ['polar-bear-bike', '北极熊骑自行车', 'image', 'structure', null],
+              ['ultraman-moto', '奥特曼骑摩托车', 'image', 'structure', null],
+              ['octopus-drums', '章鱼打架子鼓', 'image', 'structure', null],
+              ['giraffe-skate', '长颈鹿踩滑板', 'image', 'structure', null],
+              ['astro-cat-fishing', '宇航猫月球钓鱼', 'image', 'structure', null],
+              ['analog-clock', '模拟时钟 · 实时走针', 'image', 'structure', null],
+              ['solar-system', '太阳系轨道动画', 'image', 'structure', null],
+              ['bouncing-balls', '弹跳小球物理模拟', 'image', 'structure', null],
+              ['gear-train', '齿轮传动机构', 'image', 'structure', null],
+              ['city-parallax', '城市夜景视差滚动', 'image', 'structure', null],
+              ['stroke-order', '汉字笔顺书写动画', 'image', 'structure', null],
+              ['poker', '扑克翻牌', 'numeric', 'record_only', null],
+            ].map(([id, title, kind, rule, expected]) => ({
+              id, title, kind, prompt: '…题面…', judge_rule: rule, expected, auto_support: rule === 'numeric_pass' ? 1 : 0, builtin: 1,
+            }))
             let data: any = { items: qs }
             if (url.includes('/iq/tasks')) {
               data = {

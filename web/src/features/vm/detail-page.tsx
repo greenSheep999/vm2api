@@ -372,6 +372,11 @@ function VmDetailBody({
           <Button variant='ghost' size='sm' asChild>
             <Link to='/vm'>列表</Link>
           </Button>
+          <Button variant='outline' size='sm' asChild>
+            <Link to='/ops/$tab' params={{ tab: 'iq' }} search={{ vm: id } as any}>
+              去检测
+            </Link>
+          </Button>
           {slotList.length > 1 ? (
             <Select
               value={id}

@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react'
+import { Link } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { Grid2x2, List, Loader2, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/page-header'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
@@ -99,7 +101,7 @@ function renderArtifact(row: ResultRow) {
         title={row.id}
         sandbox=''
         srcDoc={html}
-        className='h-44 w-full border-0 bg-white'
+        className='h-full w-full border-0 bg-white'
         loading='lazy'
       />
     )
@@ -107,14 +109,14 @@ function renderArtifact(row: ResultRow) {
   if (row.question_kind === 'numeric') {
     const ok = row.verdict === 'pass'
     return (
-      <div className={cn('flex h-24 items-center justify-center font-mono text-3xl font-semibold', ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
+      <div className={cn('flex h-full items-center justify-center font-mono text-3xl font-semibold', ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>
         {row.answer ?? '—'}
         {row.expected != null ? <span className='ml-2 text-sm text-muted-foreground'>/ {row.expected}</span> : null}
       </div>
     )
   }
   return (
-    <div className='flex h-24 items-center justify-center px-3 text-center font-mono text-[11px] text-muted-foreground'>
+    <div className='flex h-full items-center justify-center px-3 text-center font-mono text-[11px] text-muted-foreground'>
       {row.verdict || '—'}
     </div>
   )
@@ -204,18 +206,19 @@ export function IqResultsPage() {
                 </Button>
               ))}
             </div>
-            <select
-              className='h-7 rounded border bg-background px-1.5 text-[11px]'
-              value={keyId}
-              onChange={(e) => setKeyId(e.target.value)}
-            >
-              <option value='all'>全部 Key</option>
-              {keys.map((k) => (
-                <option key={k.id} value={k.id}>
-                  {k.name || k.id}
-                </option>
-              ))}
-            </select>
+            <Select value={keyId} onValueChange={setKeyId}>
+              <SelectTrigger className='h-7 w-[190px] text-[11px]'>
+                <SelectValue placeholder='全部 Key' />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value='all'>全部 Key</SelectItem>
+                {keys.map((k) => (
+                  <SelectItem key={k.id} value={k.id}>
+                    {k.name || k.id}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <div className='flex gap-1'>
               <Button
                 size='sm'
@@ -262,7 +265,7 @@ export function IqResultsPage() {
           groups.map((group) => (
             <section key={group.id} className='space-y-2.5'>
               {/* 每个 Key 一段：标题 + 状态 + 槽位数 + 结果数 */}
-              <div className='flex flex-wrap items-center gap-2 border-b pb-1.5'>
+              <div className='flex flex-wrap items-center gap-2'>
                 <span className='text-sm font-semibold'>{group.label}</span>
                 <span
                   className={cn(
@@ -287,11 +290,21 @@ export function IqResultsPage() {
               ) : view === 'grid' ? (
                 <div className='grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4'>
                   {group.rows.map((row) => (
-                    <div key={`${group.id}-${row.id}`} className='overflow-hidden rounded-xl border bg-card shadow-sm'>
+                    <div
+                      key={`${group.id}-${row.id}`}
+                      className='flex h-[268px] flex-col overflow-hidden rounded-xl border bg-card shadow-sm'
+                    >
                       <div className='flex items-start justify-between gap-2 px-3.5 pt-3'>
                         <div className='min-w-0'>
                           <div className='flex items-center gap-1.5 font-mono text-[11px]'>
-                            <span className='font-semibold'>{row.vm_id}</span>
+                            <Link
+                              to='/vm/$id'
+                              params={{ id: row.vm_id }}
+                              className='font-semibold hover:underline'
+                              title='打开账号详情'
+                            >
+                              {row.vm_id}
+                            </Link>
                             <span className='text-muted-foreground'>·</span>
                             <span className='text-muted-foreground'>
                               {KIND_LABEL[row.question_kind || row.question_id || ''] || row.question_id || '—'}
@@ -307,7 +320,7 @@ export function IqResultsPage() {
                         </span>
                       </div>
 
-                      <div className='mt-2.5'>{renderArtifact(row)}</div>
+                      <div className='mt-2.5 min-h-0 flex-1'>{renderArtifact(row)}</div>
 
                       <div className='flex items-center justify-between px-3.5 py-2.5 font-mono text-[10px] text-muted-foreground'>
                         <span>{fmt(row.started_at)}</span>

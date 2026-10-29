@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { IqQuestion, IqRun, IqTask, OpsSummary } from './types'
 
 const CARD = 'rounded-lg border bg-card p-4'
@@ -60,6 +61,10 @@ function verdictTone(v?: string | null) {
 /** 降智检测：工作台 / 题库 / 定时任务 / 检测记录 四个独立入口。 */
 export function IqPane() {
   const [tab, setTab] = useState<'workbench' | 'questions' | 'tasks' | 'records'>('workbench')
+  const presetVm =
+    typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.hash.split('?')[1] || '').get('vm')
+      : null
   const TABS = [
     ['workbench', '检测工作台'],
     ['questions', '题库'],
@@ -81,7 +86,7 @@ export function IqPane() {
           </Button>
         ))}
       </div>
-      {tab === 'workbench' ? <IqWorkbench /> : null}
+      {tab === 'workbench' ? <IqWorkbench presetVm={presetVm} /> : null}
       {tab === 'questions' ? <IqQuestions /> : null}
       {tab === 'tasks' ? <IqTasks /> : null}
       {tab === 'records' ? <IqRecords /> : null}
@@ -90,7 +95,7 @@ export function IqPane() {
 }
 
 /** 单次检测：按槽或按 Key 选目标，选题、选模型与 effort，跑完就地看结果。 */
-function IqWorkbench() {
+function IqWorkbench({ presetVm = null }: { presetVm?: string | null }) {
   const vms = useQuery({
     queryKey: ['vms-for-iq'],
     queryFn: () => api<{ items: Array<{ id: string; platform?: string; status?: string }> }>('/api/panel/vms'),
@@ -104,7 +109,7 @@ function IqWorkbench() {
     queryFn: () => api<{ items: IqQuestion[] }>('/api/panel/ops/iq/questions'),
   })
   const [scopeType, setScopeType] = useState<'slot' | 'key'>('slot')
-  const [slotIds, setSlotIds] = useState<string[]>([])
+  const [slotIds, setSlotIds] = useState<string[]>(presetVm ? [presetVm] : [])
   const [keyIds, setKeyIds] = useState<string[]>([])
   const [model, setModel] = useState('gpt-6-astra')
   const [effort, setEffort] = useState('high')
@@ -200,33 +205,41 @@ function IqWorkbench() {
             </label>
             <label className='block'>
               <span className='text-muted-foreground'>思考强度</span>
-              <select
-                className='mt-1 h-7 w-full rounded border bg-background px-1 text-[11px]'
-                value={effort}
-                onChange={(e) => setEffort(e.target.value)}
-              >
-                {['low', 'medium', 'high', 'xhigh'].map((x) => (
-                  <option key={x} value={x}>
-                    {x}
-                  </option>
-                ))}
-              </select>
+              <Select value={effort} onValueChange={setEffort}>
+                <SelectTrigger className='mt-1 h-7 w-full text-[11px]'>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {['low', 'medium', 'high', 'xhigh'].map((x) => (
+                    <SelectItem key={x} value={x}>
+                      {x}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </label>
           </div>
           <label className='block'>
             <span className='text-muted-foreground'>题目</span>
-            <select
-              className='mt-1 h-7 w-full rounded border bg-background px-1 text-[11px]'
-              value={questionId}
-              onChange={(e) => setQuestionId(e.target.value)}
-            >
-              <option value='probe'>门票探针（两发）</option>
-              {(questions.data?.items || []).map((q) => (
-                <option key={q.id} value={q.id}>
-                  {q.title}（{q.judge_rule === 'numeric_pass' ? `期望 ${q.expected}` : q.judge_rule === 'structure' ? '形态检查' : '只记录'}）
-                </option>
-              ))}
-            </select>
+            <Select value={questionId} onValueChange={setQuestionId}>
+              <SelectTrigger className='mt-1 h-7 w-full text-[11px]'>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value='probe'>门票探针（两发）</SelectItem>
+                {(questions.data?.items || []).map((q) => (
+                  <SelectItem key={q.id} value={q.id}>
+                    {q.title}（
+                    {q.judge_rule === 'numeric_pass'
+                      ? `期望 ${q.expected}`
+                      : q.judge_rule === 'structure'
+                        ? '形态检查'
+                        : '只记录'}
+                    ）
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </label>
           <label className='block'>
             <span className='text-muted-foreground'>重复次数</span>
@@ -465,15 +478,16 @@ function IqRecords() {
     <div className={CARD}>
       <div className='flex items-center justify-between'>
         <div className='text-sm font-semibold'>检测记录</div>
-        <select
-          className='h-7 rounded border bg-background px-1 text-[11px]'
-          value={source}
-          onChange={(e) => setSource(e.target.value)}
-        >
-          <option value='all'>全部来源</option>
-          <option value='single'>单次检测</option>
-          <option value='task'>定时任务</option>
-        </select>
+        <Select value={source} onValueChange={setSource}>
+          <SelectTrigger className='h-7 w-[120px] text-[11px]'>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value='all'>全部来源</SelectItem>
+            <SelectItem value='single'>单次检测</SelectItem>
+            <SelectItem value='task'>定时任务</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
       <div className='mt-2 space-y-1'>
         {items.length === 0 ? (

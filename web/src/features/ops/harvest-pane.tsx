@@ -4,6 +4,7 @@ import { Activity, AlertTriangle, Boxes, Brain, Handshake, Loader2, Play, Ticket
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Link } from '@tanstack/react-router'
 import { api } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -342,6 +343,14 @@ export function HarvestPane() {
           </div>
         )
       })()}
+
+      <div className='flex justify-end'>
+        <Button size='sm' variant='outline' className='h-7 text-[11px]' asChild>
+          <Link to='/ops/$tab' params={{ tab: 'iq' }}>
+            去降智检测
+          </Link>
+        </Button>
+      </div>
 
       <PoolCard />
 
