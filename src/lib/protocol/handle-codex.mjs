@@ -930,6 +930,12 @@ export async function handleCodexProtocol({
         if (directMode && result?.effective_headers) {
           logBag.outbound_headers = redactHeaders(result.effective_headers)
         }
+        // 流完整性要可统计：没有 response.completed 就是被截断，客户端必然重连。
+        if (result && result.terminalState === 'incomplete') {
+          logBag.stream_incomplete = true
+          if (!logBag.error_code) logBag.error_code = 'stream_incomplete'
+        }
+        if (typeof result?.saw_completed === 'boolean') logBag.stream_completed = result.saw_completed
         // A transient seat-local failure gets the same account up to N retries
         // before the request spends a switch. 401/403/429 are never retried here:
         // they are credential/account state and must move to another seat.
