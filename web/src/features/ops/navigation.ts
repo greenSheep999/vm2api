@@ -19,7 +19,7 @@ export const OPS_ICONS: Record<OpsTabId, LucideIcon> = {
 
 export const OPS_DESCRIPTIONS: Record<OpsTabId, string> = {
   ticket: '上游回合门票（x-codex-turn-state）的采集与判定：有没有票、块数是否符合套餐。只读，不改写请求。',
-  iq: '能力是否下降。先用硬事实（模型/effort 回显、门票）排除，再谈题库与鹈鹕结构指纹。',
+  iq: '三类检测任务：门票探针（3–5 分钟，最及时）、糖果题（15 分钟，答 21 为正常）、鹈鹕结构（30 分钟，形态指纹）。每个任务有独立间隔、状态与运行历史。',
   cache: '缓存命中与写入。隐式缓存链路只回命中读取，写入量恒 0 不算异常。',
   sched: '粘性时长、配额闸线、用量探测开关。改这里会影响线上调度，保存后立即生效。',
 }

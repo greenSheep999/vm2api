@@ -1,7 +1,13 @@
-import { CheckCircle2, Clock, TicketX } from 'lucide-react'
+import { useState } from 'react'
+import { Clock, TicketX } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatDuration, formatTokenAmount } from '@/lib/usage-format'
-import type { OpsSummary } from './types'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Loader2, Play } from 'lucide-react'
+import { toast } from 'sonner'
+import { api } from '@/lib/api'
+import { Button } from '@/components/ui/button'
+import type { IqRun, IqTask, OpsSummary } from './types'
 
 const CARD = 'rounded-lg border bg-card p-4'
 
@@ -35,57 +41,163 @@ function Stat({
   )
 }
 
-export function IqPane({ data }: { data: OpsSummary }) {
-  const downgraded = data.effort.filter(
-    (e) => e.got !== '(未采集)' && e.asked !== e.got && e.asked !== '(空)',
-  )
+const KIND_LABEL: Record<string, string> = { probe: '门票探针', candy: '糖果题', pelican: '鹈鹕结构' }
+
+function fmtAt(iso?: string | null) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+}
+
+function verdictTone(v?: string | null) {
+  if (!v) return 'text-muted-foreground'
+  if (['healthy', 'healthy_same', 'pass', 'recorded'].includes(v)) return 'text-emerald-600 dark:text-emerald-400'
+  if (['degraded', 'route_changed', 'fail', 'no_answer', 'no_ticket'].includes(v)) return 'text-rose-600 dark:text-rose-400'
+  return 'text-amber-600 dark:text-amber-400'
+}
+
+/** 降智检测：有状态、可调度、带运行历史的检测任务。 */
+export function IqPane() {
+  const qc = useQueryClient()
+  const tasks = useQuery({
+    queryKey: ['iq-tasks'],
+    queryFn: () => api<{ items: IqTask[]; latest: Array<{ vm_id: string; kind: string; verdict: string; started_at: string }> }>('/api/panel/ops/iq/tasks'),
+    refetchInterval: 15_000,
+  })
+  const runs = useQuery({
+    queryKey: ['iq-runs'],
+    queryFn: () => api<{ items: IqRun[] }>('/api/panel/ops/iq/runs?limit=30'),
+    refetchInterval: 15_000,
+  })
+  const [running, setRunning] = useState<string | null>(null)
+
+  async function runNow(id: string) {
+    setRunning(id)
+    try {
+      const r = await api<{ ran: number; failed: number }>(`/api/panel/ops/iq/tasks/${id}/run`, { method: 'POST' })
+      toast.success(`执行完成：${r.ran} 个账号，失败 ${r.failed}`)
+      void qc.invalidateQueries({ queryKey: ['iq-tasks'] })
+      void qc.invalidateQueries({ queryKey: ['iq-runs'] })
+    } catch (e) {
+      toast.error(`执行失败：${(e as Error).message}`)
+    } finally {
+      setRunning(null)
+    }
+  }
+
+  async function toggle(task: IqTask) {
+    await api(`/api/panel/ops/iq/tasks/${task.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: task.enabled !== 1 }),
+    })
+    void qc.invalidateQueries({ queryKey: ['iq-tasks'] })
+  }
+
+  const items = tasks.data?.items || []
+  const latest = tasks.data?.latest || []
+
   return (
-    <div className='space-y-4'>
-      <div className='grid gap-3 sm:grid-cols-2 lg:grid-cols-3'>
-        <Stat
-          label='模型被替换'
-          value={data.modelMismatch ? String(data.modelMismatch) : '0'}
-          tone={data.modelMismatch ? 'bad' : 'good'}
-          hint='发出模型 ≠ 上游回包模型'
-        />
-        <Stat
-          label='effort 被降档'
-          value={String(downgraded.reduce((a, b) => a + b.n, 0))}
-          tone={downgraded.length ? 'bad' : 'good'}
-          hint='请求档位 > 上游回显档位'
-        />
-        <Stat
-          label='无票请求'
-          value={String(data.tickets.find((t) => t.verdict === 'absent')?.n ?? 0)}
-          tone='warn'
-          hint='门票缺失也会让上游降档'
-        />
+    <div className='space-y-3'>
+      <div className='grid gap-3 md:grid-cols-3'>
+        {items.map((task) => (
+          <div key={task.id} className={CARD}>
+            <div className='flex items-start justify-between'>
+              <div>
+                <div className='text-sm font-semibold'>{task.name}</div>
+                <div className='mt-0.5 text-[11px] text-muted-foreground'>
+                  {KIND_LABEL[task.kind] || task.kind} · 每 {Math.round(task.interval_sec / 60)} 分钟
+                  {task.only_healthy ? ' · 仅满血号' : ''}
+                </div>
+              </div>
+              <Button
+                size='sm'
+                variant={task.enabled === 1 ? 'secondary' : 'outline'}
+                className='h-6 px-2 text-[11px]'
+                onClick={() => void toggle(task)}
+              >
+                {task.enabled === 1 ? '已启用' : '已停用'}
+              </Button>
+            </div>
+            <div className='mt-2 space-y-1 text-[11px]'>
+              <div className='flex justify-between'>
+                <span className='text-muted-foreground'>上次执行</span>
+                <span className='font-mono'>{fmtAt(task.last_run_at)}</span>
+              </div>
+              <div className='flex justify-between'>
+                <span className='text-muted-foreground'>下次执行</span>
+                <span className='font-mono'>{fmtAt(task.next_run_at)}</span>
+              </div>
+              <div className='flex justify-between'>
+                <span className='text-muted-foreground'>运行 / 失败</span>
+                <span className='font-mono'>
+                  {task.run_count} / <span className={task.fail_count ? 'text-rose-600 dark:text-rose-400' : ''}>{task.fail_count}</span>
+                </span>
+              </div>
+              <div className='flex justify-between'>
+                <span className='text-muted-foreground'>最近结论</span>
+                <span className={cn('font-mono', verdictTone(task.last_verdict))}>
+                  {task.last_verdict || '—'}
+                </span>
+              </div>
+            </div>
+            <Button
+              size='sm'
+              variant='outline'
+              className='mt-2 h-6 w-full text-[11px]'
+              disabled={running === task.id}
+              onClick={() => void runNow(task.id)}
+            >
+              {running === task.id ? <Loader2 className='mr-1 h-3 w-3 animate-spin' /> : <Play className='mr-1 h-3 w-3' />}
+              立即执行
+            </Button>
+          </div>
+        ))}
       </div>
 
-      <section className={CARD}>
-        <h4 className='mb-3 text-sm font-semibold'>effort 请求 vs 上游回显</h4>
-        <div className='space-y-1.5 text-xs'>
-          {data.effort.length === 0 ? (
-            <p className='text-muted-foreground'>窗口内没有请求。</p>
+      <div className={CARD}>
+        <div className='flex items-center justify-between'>
+          <div className='text-sm font-semibold'>账号最新结论</div>
+          <span className='text-[11px] text-muted-foreground'>
+            按账号 × 检测类型取最近一次
+          </span>
+        </div>
+        <div className='mt-2 flex flex-wrap gap-2'>
+          {latest.length === 0 ? (
+            <span className='text-xs text-muted-foreground'>还没有运行记录</span>
           ) : (
-            data.effort.map((e) => (
-              <div key={`${e.asked}-${e.got}`} className='flex justify-between gap-3'>
-                <span className='font-mono'>
-                  {e.asked} → {e.got}
-                </span>
-                <span className='tabular-nums text-muted-foreground'>n={e.n}</span>
+            latest.map((row) => (
+              <span key={`${row.vm_id}-${row.kind}`} className='rounded border px-2 py-1 font-mono text-[11px]'>
+                {row.vm_id}
+                <span className='mx-1 text-muted-foreground'>{KIND_LABEL[row.kind] || row.kind}</span>
+                <span className={verdictTone(row.verdict)}>{row.verdict}</span>
+              </span>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className={CARD}>
+        <div className='text-sm font-semibold'>运行历史</div>
+        <div className='mt-2 space-y-1'>
+          {(runs.data?.items || []).length === 0 ? (
+            <div className='py-3 text-center text-xs text-muted-foreground'>还没有历史</div>
+          ) : (
+            (runs.data?.items || []).map((run) => (
+              <div key={run.id} className='flex items-center justify-between gap-2 border-b py-1 font-mono text-[11px] last:border-0'>
+                <span className='shrink-0 text-muted-foreground'>{fmtAt(run.started_at)}</span>
+                <span className='shrink-0'>{run.vm_id}</span>
+                <span className={cn('shrink-0', verdictTone(run.verdict))}>{run.verdict}</span>
+                {run.answer != null ? (
+                  <span className={cn('shrink-0', verdictTone(run.verdict))}>
+                    答 {run.answer}/{run.expected ?? '—'}
+                  </span>
+                ) : null}
+                <span className='flex-1 truncate text-right text-muted-foreground'>{run.duration_ms ?? 0}ms</span>
               </div>
             ))
           )}
         </div>
-      </section>
-
-      <div className='flex gap-2 rounded-lg border border-sky-200 bg-sky-50/60 p-3 text-xs text-sky-800 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-300'>
-        <CheckCircle2 className='mt-0.5 h-4 w-4 shrink-0' />
-        <span>
-          先用硬事实排除：模型没被换、effort 没被降，剩下的才是「能力真的下降」。
-          题库（candy）与鹈鹕结构指纹尚未接入，计划接 probe 的判据，详见 docs/ops/iq-detection.md。
-        </span>
       </div>
     </div>
   )

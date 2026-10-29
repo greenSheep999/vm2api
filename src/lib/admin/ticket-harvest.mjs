@@ -367,7 +367,7 @@ function latestTicketRow(vmId, model, sinceIso) {
  * 身份头必须齐全（originator/version/OpenAI-Beta）——实测缺任意一个上游都不铸票，
  * 这也正是 worker 白名单那个 bug 的影响面。
  */
-async function mintShot({ edgeIp, proxyUrl, token, model, sessionId, state, prompt = null, route = [] }) {
+async function mintShot({ edgeIp, proxyUrl, token, model, sessionId, state, prompt = null, route = [], effort = null }) {
   const dialIp = edgeIp || (await upstreamIPv4()) || UPSTREAM_HOST
   return new Promise((resolve) => {
     const payload = JSON.stringify({
@@ -377,6 +377,7 @@ async function mintShot({ edgeIp, proxyUrl, token, model, sessionId, state, prom
       store: false,
       input: [{ type: 'message', role: 'user', content: [{ type: 'input_text', text: prompt || 'Reply OK' }] }],
       parallel_tool_calls: false,
+      ...(effort ? { reasoning: { effort } } : {}),
     })
     const agent = proxyUrl ? createSocksProxyAgent(proxyUrl) : undefined
     const headers = {
@@ -559,6 +560,23 @@ export async function runTicketProbe({ projectRoot, vmId, model, edgeIp = null, 
     route: { shot1: shot1.route || [], shot2: shot2?.route || [] },
     edge_ip: edgeIp,
   }
+}
+
+/**
+ * 对外暴露的「发一次」：给单次检测 / 自定义题库用。
+ * 返回状态码与解析后的文本（不是原始 SSE）。
+ */
+export async function mintOnce({ vmId, model, prompt, proxyUrl = null, token = null, effort = null, edgeIp = null }) {
+  const shot = await mintShot({
+    edgeIp,
+    proxyUrl,
+    token,
+    model,
+    prompt,
+    effort,
+    sessionId: `once-${vmId || 'x'}-${Date.now().toString(36)}`,
+  })
+  return { status: shot.status, text: extractText(shot.preview), raw_len: String(shot.preview || '').length }
 }
 
 /**

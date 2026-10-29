@@ -125,7 +125,32 @@ function previewOpsAcl() {
               try { body = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}') } catch {}
               const id = String(body.vm_id || '')
               let payload: any = { ok: true, data: {} }
-              if (url.includes('/probe')) {
+              if (url.includes('/ops/iq/tasks') && req.method === 'GET') {
+                const now = Date.now()
+                payload.data = {
+                  items: [
+                    { id: 'iq_demo1', name: '门票探针', kind: 'probe', interval_sec: 180, model: null, enabled: 1, only_healthy: 0, last_run_at: new Date(now - 120_000).toISOString(), next_run_at: new Date(now + 60_000).toISOString(), last_verdict: 'degraded', run_count: 128, fail_count: 96 },
+                    { id: 'iq_demo2', name: '糖果题', kind: 'candy', interval_sec: 900, model: null, enabled: 1, only_healthy: 1, last_run_at: new Date(now - 420_000).toISOString(), next_run_at: new Date(now + 480_000).toISOString(), last_verdict: 'pass', run_count: 42, fail_count: 3 },
+                    { id: 'iq_demo3', name: '鹈鹕结构', kind: 'pelican', interval_sec: 1800, model: null, enabled: 0, only_healthy: 1, last_run_at: null, next_run_at: null, last_verdict: null, run_count: 0, fail_count: 0 },
+                  ],
+                  latest: [
+                    { vm_id: 'vm-13', kind: 'probe', verdict: 'healthy', started_at: new Date(now - 90_000).toISOString() },
+                    { vm_id: 'vm-13', kind: 'candy', verdict: 'pass', started_at: new Date(now - 400_000).toISOString() },
+                    { vm_id: 'vm-gpt-02', kind: 'probe', verdict: 'degraded', started_at: new Date(now - 100_000).toISOString() },
+                    { vm_id: 'vm-gpt-02', kind: 'candy', verdict: 'fail', started_at: new Date(now - 500_000).toISOString() },
+                  ],
+                }
+              } else if (url.includes('/ops/iq/runs') && req.method === 'GET') {
+                const now = Date.now()
+                payload.data = {
+                  items: [
+                    { id: 'r1', task_id: 'iq_demo1', vm_id: 'vm-13', model: 'gpt-6-astra', verdict: 'healthy', answer: null, expected: null, detail: 'shot1=200/780 shot2=200/0', ok: 1, started_at: new Date(now - 90_000).toISOString(), duration_ms: 2140 },
+                    { id: 'r2', task_id: 'iq_demo2', vm_id: 'vm-13', model: 'gpt-6-astra', verdict: 'pass', answer: 21, expected: 21, detail: '', ok: 1, started_at: new Date(now - 400_000).toISOString(), duration_ms: 5200 },
+                    { id: 'r3', task_id: 'iq_demo1', vm_id: 'vm-gpt-02', model: 'gpt-6-astra', verdict: 'degraded', answer: null, expected: null, detail: 'shot2 reissued', ok: 0, started_at: new Date(now - 100_000).toISOString(), duration_ms: 2380 },
+                    { id: 'r4', task_id: 'iq_demo2', vm_id: 'vm-gpt-02', model: 'gpt-6-astra', verdict: 'fail', answer: 29, expected: 21, detail: '', ok: 0, started_at: new Date(now - 500_000).toISOString(), duration_ms: 6100 },
+                  ],
+                }
+              } else if (url.includes('/probe')) {
                 const model = String(body.model || 'gpt-6-astra')
                 const healthy = st.seq % 2 === 0
                 st.events.unshift({ id: st.seq++, at: now(), kind: 'probe', vm_id: id, model, http_status: 200, result: healthy ? 'ok' : 'fail', reason: healthy ? 'healthy' : 'degraded', detail: 'shot1=200/780 shot2=200/0', proxy: 'slot', edge_ip: null })

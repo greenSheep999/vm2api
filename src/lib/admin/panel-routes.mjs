@@ -2086,6 +2086,85 @@ export function createPanelHandler(ctx) {
         }
       }
 
+      // --- 降智检测：题库 + 单次检测 ---
+      if (p === '/api/panel/ops/iq/questions' && req.method === 'GET') {
+        const { ensureBuiltinQuestions } = await import('./iq-questions.mjs')
+        return json(res, 200, { ok: true, data: { items: ensureBuiltinQuestions() } })
+      }
+      if (p === '/api/panel/ops/iq/questions' && req.method === 'POST') {
+        const body = await readBody(req, 16384).catch(() => ({}))
+        const { createQuestion } = await import('./iq-questions.mjs')
+        return json(res, 200, { ok: true, item: createQuestion(body || {}) })
+      }
+      if (p.startsWith('/api/panel/ops/iq/questions/') && req.method === 'DELETE') {
+        const id = p.slice('/api/panel/ops/iq/questions/'.length)
+        const { deleteQuestion } = await import('./iq-questions.mjs')
+        return json(res, 200, { ok: deleteQuestion(id) })
+      }
+      if (p === '/api/panel/ops/iq/run' && req.method === 'POST') {
+        const body = await readBody(req, 16384).catch(() => ({}))
+        const { runSingleCheck } = await import('./iq-tasks.mjs')
+        const result = await runSingleCheck({
+          projectRoot: cfg.paths.project,
+          scopeType: String(body?.scope_type || 'slot'),
+          scopeIds: Array.isArray(body?.scope_ids) ? body.scope_ids : [],
+          model: body?.model,
+          effort: body?.effort || null,
+          questionId: String(body?.question_id || 'candy'),
+          repeat: body?.repeat,
+        })
+        return json(res, 200, { ok: true, data: result })
+      }
+
+      // --- 降智检测任务 ---
+      if (p === '/api/panel/ops/iq/tasks' && req.method === 'GET') {
+        const { ensureDefaultTasks, latestByVm, listTasks } = await import('./iq-tasks.mjs')
+        return json(res, 200, { ok: true, data: { items: ensureDefaultTasks() || listTasks(), latest: latestByVm() } })
+      }
+      if (p === '/api/panel/ops/iq/tasks' && req.method === 'POST') {
+        const body = await readBody(req, 8192).catch(() => ({}))
+        try {
+          const { createTask } = await import('./iq-tasks.mjs')
+          return json(res, 200, { ok: true, item: createTask(body || {}) })
+        } catch (e) {
+          return json(res, 400, { ok: false, error: { message: String(e?.message || e) } })
+        }
+      }
+      if (p.startsWith('/api/panel/ops/iq/tasks/') && req.method === 'PATCH') {
+        const id = p.slice('/api/panel/ops/iq/tasks/'.length)
+        const body = await readBody(req, 8192).catch(() => ({}))
+        const { updateTask } = await import('./iq-tasks.mjs')
+        const item = updateTask(id, body || {})
+        return item ? json(res, 200, { ok: true, item }) : json(res, 404, { ok: false, error: { message: 'not_found' } })
+      }
+      if (p.startsWith('/api/panel/ops/iq/tasks/') && req.method === 'DELETE') {
+        const id = p.slice('/api/panel/ops/iq/tasks/'.length)
+        const { deleteTask } = await import('./iq-tasks.mjs')
+        return json(res, 200, { ok: deleteTask(id) })
+      }
+      if (p === '/api/panel/ops/iq/runs' && req.method === 'GET') {
+        const url = new URL(req.url, 'http://localhost')
+        const { listRuns } = await import('./iq-tasks.mjs')
+        return json(res, 200, {
+          ok: true,
+          data: {
+            items: listRuns({
+              taskId: url.searchParams.get('task_id'),
+              vmId: url.searchParams.get('vm_id'),
+              limit: Number(url.searchParams.get('limit')) || 50,
+            }),
+          },
+        })
+      }
+      if (p.startsWith('/api/panel/ops/iq/tasks/') && p.endsWith('/run') && req.method === 'POST') {
+        const id = p.slice('/api/panel/ops/iq/tasks/'.length, -'/run'.length)
+        const { getTask, runTask } = await import('./iq-tasks.mjs')
+        const task = getTask(id)
+        if (!task) return json(res, 404, { ok: false, error: { message: 'not_found' } })
+        const result = await runTask({ projectRoot: cfg.paths.project, task })
+        return json(res, 200, { ok: true, data: result })
+      }
+
       // POST /api/panel/ops/harvest/borrow — 借票（来源票当引子 → 目标铸票 → 续接验证）
       if (req.method === 'POST' && p === '/api/panel/ops/harvest/borrow') {
         const body = await readBody(req, 8192).catch(() => ({}))

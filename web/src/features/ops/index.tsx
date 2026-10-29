@@ -65,7 +65,7 @@ export function OpsPage() {
             {summary.data ? (
               <>
                 {tab === 'ticket' ? <HarvestPane /> : null}
-                {tab === 'iq' ? <IqPane data={summary.data} /> : null}
+                {tab === 'iq' ? <IqPane /> : null}
                 {tab === 'cache' ? <CachePane data={summary.data} /> : null}
                 {tab === 'sched' ? <SchedPane data={summary.data} /> : null}
               </>

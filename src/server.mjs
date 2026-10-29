@@ -1301,6 +1301,20 @@ if (process.env.KIN_CRS_MOCK !== '1') {
 await bootApiKernel(cfg)
 
 server.listen(cfg.port, cfg.host, () => {
+  // 降智检测任务调度：任务自带间隔与状态，每分钟检查一次是否有到点的任务。
+  try {
+    const iqTimer = setInterval(async () => {
+      try {
+        const { runDueTasks } = await import('./lib/admin/iq-tasks.mjs')
+        await runDueTasks({ projectRoot: cfg.paths.project })
+      } catch (error) {
+        console.warn('[iq-tasks] tick failed', error?.message || error)
+      }
+    }, 60_000)
+    iqTimer.unref?.()
+  } catch (e) {
+    console.warn('[iq-tasks] start failed', e?.message || e)
+  }
   // 定时门票探针：默认关闭（probe_interval_seconds=0），开启后按间隔轮询参与打票的账号。
   try {
     const timer = setInterval(async () => {

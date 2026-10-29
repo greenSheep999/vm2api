@@ -81,3 +81,32 @@ export type OpsSummary = {
     usage_probe_enabled: boolean | null
   }
 }
+
+export type IqTask = {
+  id: string
+  name: string
+  kind: 'probe' | 'candy' | 'pelican'
+  interval_sec: number
+  model: string | null
+  enabled: number
+  only_healthy: number
+  last_run_at: string | null
+  next_run_at: string | null
+  last_verdict: string | null
+  run_count: number
+  fail_count: number
+}
+
+export type IqRun = {
+  id: string
+  task_id: string
+  vm_id: string
+  model: string | null
+  verdict: string | null
+  answer: number | null
+  expected: number | null
+  detail: string | null
+  ok: number
+  started_at: string
+  duration_ms: number | null
+}
