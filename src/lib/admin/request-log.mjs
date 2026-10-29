@@ -569,6 +569,7 @@ export class RequestLogStore {
       ...breakdown,
       web_search_requests: webSearch,
       requested_model: extra.requested_model || extra.model || null,
+      upstream_path: extra.upstream_path || null,
       upstream_model: extra.upstream_model || null,
       upstream_response_model: extra.upstream_response_model || null,
       upstream_reasoning_effort: extra.upstream_reasoning_effort || null,
