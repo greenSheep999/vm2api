@@ -9,9 +9,8 @@ import { cn } from '@/lib/utils'
 
 type BucketRow = { plan: string; bucket: string; samples: number; hitRatio: number }
 type SlotRow = { vmId: string; plan: string; samples: number; hitRatio: number }
-type KeyRow = { keyId: string; keyName: string; samples: number; hitRatio: number }
-type Stats = { bucketRows: BucketRow[]; slotRows: SlotRow[]; keyRows: KeyRow[]; hours: number }
-type TestRound = { round: number; status?: number; cachedTokens: number; inputTokens: number; hitRatio: number; totalMs?: number }
+type Stats = { bucketRows: BucketRow[]; slotRows: SlotRow[]; hours: number }
+type TestRound = { round: number; cachedTokens: number; inputTokens: number; hitRatio: number; ttftMs: number | null }
 
 const BUCKET_ORDER = ['0-1min', '1-5min', '5-15min', '15-60min', '1-6h', '>6h']
 
@@ -28,9 +27,8 @@ function tone(v: number) {
  * 「缓存比例」不是能直接设的数字，而是由空闲间隔、是否换号、请求键是否稳定共同决定。
  */
 export function CacheLabPane() {
-  const [keyId, setKeyId] = useState('')
-  const [vmId, setVmId] = useState('')
-  const [model, setModel] = useState('gpt-5.6-sol')
+  const [vmId, setVmId] = useState('vm-gpt-03')
+  const [model, setModel] = useState('gpt-6-astra')
   const [count, setCount] = useState(3)
   const [gapSec, setGapSec] = useState(5)
 
@@ -45,7 +43,7 @@ export function CacheLabPane() {
       api<{ ok: boolean; results: TestRound[]; reason?: string }>('/api/panel/ops/cache/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key_id: keyId, vm_id: vmId || null, model, count, gap_ms: gapSec * 1000 }),
+        body: JSON.stringify({ vm_id: vmId, model, count, gap_ms: gapSec * 1000 }),
       }),
     onSuccess: (r) => {
       if (!r?.ok) toast.warning(`测试未成功：${r?.reason || 'unknown'}`)
@@ -93,31 +91,6 @@ export function CacheLabPane() {
       </section>
 
       <section className='rounded-lg border p-3'>
-        <h4 className='text-sm font-semibold'>按 Key（缓存归属口径）</h4>
-        <p className='mt-1 text-[11px] text-muted-foreground'>
-          缓存是按「客户会话 + 账号」滚动的，所以策略应当挂在 key 上，而不是套餐上。
-        </p>
-        <div className='mt-2 divide-y'>
-          {(stats.data?.keyRows || []).map((k) => (
-            <div key={k.keyId} className='flex items-center justify-between gap-2 py-1 text-[11px]'>
-              <span className='truncate font-mono'>{k.keyName}</span>
-              <span className='text-muted-foreground'>{k.samples} 发</span>
-              <span className={cn('tabular-nums', tone(k.hitRatio))}>{pct(k.hitRatio)}</span>
-              <Button
-                size='sm'
-                variant='ghost'
-                className='h-6 px-1.5 text-[10px]'
-                onClick={() => setKeyId(k.keyId)}
-              >
-                选它测试
-              </Button>
-            </div>
-          ))}
-          {!stats.data?.keyRows?.length ? <p className='py-2 text-[11px] text-muted-foreground'>暂无数据</p> : null}
-        </div>
-      </section>
-
-      <section className='rounded-lg border p-3'>
         <h4 className='text-sm font-semibold'>按槽位</h4>
         <div className='mt-2 divide-y'>
           {(stats.data?.slotRows || []).map((s) => (
@@ -133,14 +106,10 @@ export function CacheLabPane() {
 
       <section className='rounded-lg border p-3'>
         <h4 className='text-sm font-semibold'>主动测试</h4>
-        <div className='mt-2 grid gap-2 sm:grid-cols-3 lg:grid-cols-5'>
+        <div className='mt-2 grid gap-2 sm:grid-cols-4'>
           <div className='space-y-1'>
-            <Label className='text-[11px]'>Key（必填）</Label>
-            <Input className='h-8 text-xs' value={keyId} placeholder='key_xxx' onChange={(e) => setKeyId(e.target.value)} />
-          </div>
-          <div className='space-y-1'>
-            <Label className='text-[11px]'>固定槽位（可空）</Label>
-            <Input className='h-8 text-xs' value={vmId} placeholder='留空=按调度' onChange={(e) => setVmId(e.target.value)} />
+            <Label className='text-[11px]'>槽位</Label>
+            <Input className='h-8 text-xs' value={vmId} onChange={(e) => setVmId(e.target.value)} />
           </div>
           <div className='space-y-1'>
             <Label className='text-[11px]'>模型</Label>
@@ -167,7 +136,7 @@ export function CacheLabPane() {
                   缓存 {r.cachedTokens} / 输入 {r.inputTokens}
                 </span>
                 <span className={cn('tabular-nums', tone(r.hitRatio))}>{pct(r.hitRatio)}</span>
-                <span className='tabular-nums text-muted-foreground'>{r.totalMs ?? '—'}ms</span>
+                <span className='tabular-nums text-muted-foreground'>{r.ttftMs ?? '—'}ms</span>
               </div>
             ))}
           </div>
