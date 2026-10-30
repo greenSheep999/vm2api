@@ -3072,13 +3072,14 @@ export function createPanelHandler(ctx) {
           !hasWeight &&
           !hasMemory &&
           !hasTransport &&
+          !hasCodexSettings &&
           !followProxyTz
         ) {
           return json(res, 400, {
             ok: false,
             error: {
               message:
-                'max_concurrency, max_rpm, max_sessions, session_slots, quota_override, allowed_models, auth_scheme, inference_engine, persona_preset, schedule_level, active_hours, timezone, weight, transport, machine.memory or timezone_follow_proxy required',
+                'max_concurrency, max_rpm, max_sessions, session_slots, quota_override, allowed_models, auth_scheme, inference_engine, persona_preset, schedule_level, active_hours, timezone, weight, transport, codex_settings, machine.memory or timezone_follow_proxy required',
             },
           })
         }
