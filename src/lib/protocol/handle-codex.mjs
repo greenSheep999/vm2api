@@ -5,6 +5,7 @@ import path from 'node:path'
 import { resolveStreamIdleTimeoutMs } from '../core/config.mjs'
 import { isClientStream, fromClaudeToOpenAIChat, fromClaudeToOpenAICompletions } from './convert.mjs'
 import { getVm, listVms, persistCodexUsage, setScheduleOff, syncCodexQuotaSchedule } from '../vm/vm-registry.mjs'
+import { getDb } from '../db/database.mjs'
 import { isValidVmId } from '../vm/vm-file.mjs'
 import { isCodexProtocolAllowed, isCodexVm, normalizeCodexRouting } from './codex-route.mjs'
 import { keyAllowsVm, keyScopeFromRequest, vmPoolDenial } from '../admin/key-scope.mjs'
@@ -232,8 +233,24 @@ function pinnedVmId(req) {
  * only run where that response lives.
  */
 
-/** 取该槽位套餐对应的缓存策略；读不到就退回 default。 */
-function cacheGuardPolicy(routing, projectRoot, vmId) {
+/**
+ * 缓存策略：按 key 优先（缓存归属是客户），没有就退回该槽位的套餐策略。
+ */
+function cacheGuardPolicy(routing, projectRoot, vmId, req) {
+  try {
+    const keyId = req?.apiKeyId || req?.api_key_id || null
+    if (keyId) {
+      const rec = getDb().prepare('SELECT cache_policy FROM api_keys WHERE id = ?').get(keyId)
+      if (rec?.cache_policy) {
+        const parsed = JSON.parse(rec.cache_policy)
+        return {
+          max_idle_seconds: Number(parsed.max_idle_seconds) || 60,
+          block_migration: parsed.block_migration === true,
+          target_ratio: Number(parsed.target_ratio) || 0.8,
+        }
+      }
+    }
+  } catch {}
   const cache = routing?.codex?.cache || {}
   let plan = 'default'
   try {
@@ -322,7 +339,7 @@ export function pickCodexCandidates(
   // 缓存守护：Pro 档的会话一旦绑号，宁可等它恢复也不换号——换一次就把
   // 已经滚起来的前缀缓存全丢掉，TTFT 会从 3s 跳到 30s。
   if (boundLeft && bound?.vmId) {
-    const policy = cacheGuardPolicy(routing, projectRoot, bound.vmId)
+    const policy = cacheGuardPolicy(routing, projectRoot, bound.vmId, req)
     const idleOk = cacheGuardIdleWithin(policy, bound)
     if (policy.block_migration && idleOk) {
       return { error: 'cache_hold', ids: [], sessionKey, stickyKeys, boundVmId: bound.vmId, retry_after_s: 5 }

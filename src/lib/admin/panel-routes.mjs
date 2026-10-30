@@ -2191,6 +2191,27 @@ export function createPanelHandler(ctx) {
         }
       }
 
+      // PUT /api/panel/ops/cache/policy — 按 key 设置缓存策略
+      if (req.method === 'PUT' && p === '/api/panel/ops/cache/policy') {
+        const body = await readBody(req, 8192).catch(() => ({}))
+        const keyId = String(body?.key_id || '').trim()
+        if (!keyId) return json(res, 400, { ok: false, error: { message: 'key_id required' } })
+        const policy = body?.policy && typeof body.policy === 'object' ? body.policy : null
+        const normalized = policy
+          ? JSON.stringify({
+              max_idle_seconds: Math.max(0, Math.min(3600, Number(policy.max_idle_seconds) || 60)),
+              block_migration: policy.block_migration === true,
+              target_ratio: Math.max(0, Math.min(1, Number(policy.target_ratio) || 0.8)),
+            })
+          : null
+        try {
+          getDb().prepare('UPDATE api_keys SET cache_policy = ? WHERE id = ?').run(normalized, keyId)
+        } catch (error) {
+          return json(res, 500, { ok: false, error: { message: String(error?.message || error) } })
+        }
+        return json(res, 200, { ok: true, data: { key_id: keyId, policy: normalized ? JSON.parse(normalized) : null } })
+      }
+
       // GET /api/panel/ops/cache/stats — 缓存命中率（按套餐 × 空闲间隔、按槽位）
       if (req.method === 'GET' && p === '/api/panel/ops/cache/stats') {
         const { cacheStats } = await import('./cache-lab.mjs')
@@ -2201,16 +2222,18 @@ export function createPanelHandler(ctx) {
       // POST /api/panel/ops/cache/test — 主动缓存测试（同会话连发，量命中率）
       if (req.method === 'POST' && p === '/api/panel/ops/cache/test') {
         const body = await readBody(req, 8192).catch(() => ({}))
-        const vmId = String(body?.vm_id || '').trim()
-        if (!vmId) return json(res, 400, { ok: false, error: { message: 'vm_id required' } })
+        const keyId = String(body?.key_id || '').trim()
+        if (!keyId) return json(res, 400, { ok: false, error: { message: 'key_id required' } })
         const { runCacheTest } = await import('./cache-lab.mjs')
         const result = await runCacheTest({
           projectRoot: cfg.paths.project,
-          vmId,
+          keyId,
+          vmId: String(body?.vm_id || '').trim() || null,
           model: String(body?.model || 'gpt-6-astra'),
           count: Number(body?.count) || 3,
           gapMs: Number(body?.gap_ms) || 0,
           padTokens: Number(body?.pad_tokens) || 1500,
+          port: ctx.port || ctx.serverPort || undefined,
         })
         return json(res, result.ok ? 200 : 400, { ok: result.ok, data: result })
       }
