@@ -1315,6 +1315,29 @@ server.listen(cfg.port, cfg.host, () => {
   } catch (e) {
     console.warn('[iq-tasks] start failed', e?.message || e)
   }
+  // 缓存配比闭环：每 5 分钟按「实测命中率 vs 目标」调节主动打散比例。
+  // 只对配了 target_ratio 的 key 生效，其余 key 不做任何事。
+  try {
+    const cacheTimer = setInterval(async () => {
+      try {
+        const { runCacheControlTick } = await import('./lib/pool/cache-controller.mjs')
+        const adjusted = runCacheControlTick({ windowMinutes: 30 })
+        if (adjusted.length) {
+          for (const item of adjusted) {
+            console.log(
+              `[cache-control] key=${item.keyId} target=${(item.target * 100).toFixed(0)}% ` +
+                `measured=${(item.measured * 100).toFixed(1)}% bust=${item.prev}->${item.next}`,
+            )
+          }
+        }
+      } catch (error) {
+        console.warn('[cache-control] tick failed', error?.message || error)
+      }
+    }, 300_000)
+    cacheTimer.unref?.()
+  } catch (e) {
+    console.warn('[cache-control] start failed', e?.message || e)
+  }
   // 定时门票探针：默认关闭（probe_interval_seconds=0），开启后按间隔轮询参与打票的账号。
   try {
     const timer = setInterval(async () => {

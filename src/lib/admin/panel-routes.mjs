@@ -2191,6 +2191,36 @@ export function createPanelHandler(ctx) {
         }
       }
 
+      // GET /api/panel/ops/cache/policies — 每个 key 的缓存策略 + 闭环状态
+      if (req.method === 'GET' && p === '/api/panel/ops/cache/policies') {
+        const { listKeyCachePolicies } = await import('./cache-lab.mjs')
+        const { cacheControlState } = await import('../pool/cache-controller.mjs')
+        const items = listKeyCachePolicies().map((it) => ({ ...it, control: cacheControlState(it.keyId) }))
+        return json(res, 200, { ok: true, data: { items } })
+      }
+
+      // POST /api/panel/ops/cache/tick — 立刻跑一次闭环调整（面板手动触发）
+      if (req.method === 'POST' && p === '/api/panel/ops/cache/tick') {
+        const { runCacheControlTick } = await import('../pool/cache-controller.mjs')
+        return json(res, 200, { ok: true, data: { adjusted: runCacheControlTick() } })
+      }
+
+      // PUT /api/panel/ops/cache/policy — 按 key 设置缓存策略
+      if (req.method === 'PUT' && p === '/api/panel/ops/cache/policy') {
+        const body = await readBody(req, 8192).catch(() => ({}))
+        const keyId = String(body?.key_id || '').trim()
+        if (!keyId) return json(res, 400, { ok: false, error: { message: 'key_id required' } })
+        const policy = body?.policy && typeof body.policy === 'object' ? body.policy : null
+        const { normalizeKeyCachePolicy } = await import('./cache-lab.mjs')
+        const normalized = policy ? JSON.stringify(normalizeKeyCachePolicy(policy)) : null
+        try {
+          getDb().prepare('UPDATE api_keys SET cache_policy = ? WHERE id = ?').run(normalized, keyId)
+        } catch (error) {
+          return json(res, 500, { ok: false, error: { message: String(error?.message || error) } })
+        }
+        return json(res, 200, { ok: true, data: { key_id: keyId, policy: normalized ? JSON.parse(normalized) : null } })
+      }
+
       // GET /api/panel/ops/cache/stats — 缓存命中率（按套餐 × 空闲间隔、按槽位）
       if (req.method === 'GET' && p === '/api/panel/ops/cache/stats') {
         const { cacheStats } = await import('./cache-lab.mjs')
@@ -2201,16 +2231,21 @@ export function createPanelHandler(ctx) {
       // POST /api/panel/ops/cache/test — 主动缓存测试（同会话连发，量命中率）
       if (req.method === 'POST' && p === '/api/panel/ops/cache/test') {
         const body = await readBody(req, 8192).catch(() => ({}))
-        const vmId = String(body?.vm_id || '').trim()
-        if (!vmId) return json(res, 400, { ok: false, error: { message: 'vm_id required' } })
+        const keyId = String(body?.key_id || '').trim()
+        if (!keyId) return json(res, 400, { ok: false, error: { message: 'key_id required' } })
         const { runCacheTest } = await import('./cache-lab.mjs')
         const result = await runCacheTest({
           projectRoot: cfg.paths.project,
-          vmId,
+          keyId,
+          vmId: String(body?.vm_id || '').trim() || null,
           model: String(body?.model || 'gpt-6-astra'),
-          count: Number(body?.count) || 3,
-          gapMs: Number(body?.gap_ms) || 0,
-          padTokens: Number(body?.pad_tokens) || 1500,
+          rounds: Number(body?.rounds) || 3,
+          prefixParagraphs: Number(body?.prefix_paragraphs) || 48,
+          intervalMs: Number(body?.interval_ms) || 1000,
+          maxOutputTokens: Number(body?.max_output_tokens) || 256,
+          effort: body?.effort ? String(body.effort) : null,
+          timeoutSec: Number(body?.timeout_s) || 120,
+          port: ctx.port || ctx.serverPort || undefined,
         })
         return json(res, result.ok ? 200 : 400, { ok: result.ok, data: result })
       }

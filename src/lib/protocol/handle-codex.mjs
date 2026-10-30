@@ -5,6 +5,9 @@ import path from 'node:path'
 import { resolveStreamIdleTimeoutMs } from '../core/config.mjs'
 import { isClientStream, fromClaudeToOpenAIChat, fromClaudeToOpenAICompletions } from './convert.mjs'
 import { getVm, listVms, persistCodexUsage, setScheduleOff, syncCodexQuotaSchedule } from '../vm/vm-registry.mjs'
+import { getDb } from '../db/database.mjs'
+import { rememberResponseId, recallResponseId, responseIdFromSseLine } from '../pool/cache-continuity.mjs'
+import { bustPermilleFor, shouldBustSession } from '../pool/cache-controller.mjs'
 import { isValidVmId } from '../vm/vm-file.mjs'
 import { isCodexProtocolAllowed, isCodexVm, normalizeCodexRouting } from './codex-route.mjs'
 import { keyAllowsVm, keyScopeFromRequest, vmPoolDenial } from '../admin/key-scope.mjs'
@@ -212,8 +215,10 @@ export function isRetryableSameCodexAccount(
 
 function applyCodexRebuildBody(body, sessionId, mode) {
   const out = { ...body }
+  // 缓存键必须逐轮稳定：同一个会话永远用同一个 prompt_cache_key，
+  // 否则上游把它当成新前缀，缓存直接 miss（TTFT 会从秒级跳到几十秒）。
+  if (sessionId) out.prompt_cache_key = sessionId
   if (mode !== 'rebuild') return out
-  out.prompt_cache_key = sessionId
   delete out.conversation_id
   delete out.session_id
   return out
@@ -232,8 +237,45 @@ function pinnedVmId(req) {
  * only run where that response lives.
  */
 
-/** 取该槽位套餐对应的缓存策略；读不到就退回 default。 */
-function cacheGuardPolicy(routing, projectRoot, vmId) {
+/** 这个 Key 是否开启了「强制续接」。 */
+function cacheContinueFor(req) {
+  try {
+    const keyId = req?.apiKeyId || req?.api_key_id || null
+    if (!keyId) return false
+    const rec = getDb().prepare('SELECT cache_policy FROM api_keys WHERE id = ?').get(keyId)
+    if (!rec?.cache_policy) return false
+    return JSON.parse(rec.cache_policy)?.force_continue === true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * 缓存策略：按 key 优先（缓存归属是客户），没有就退回该槽位的套餐策略。
+ */
+function cacheGuardPolicy(routing, projectRoot, vmId, req) {
+  try {
+    const keyId = req?.apiKeyId || req?.api_key_id || null
+    if (keyId) {
+      const rec = getDb().prepare('SELECT cache_policy FROM api_keys WHERE id = ?').get(keyId)
+      if (rec?.cache_policy) {
+        const parsed = JSON.parse(rec.cache_policy)
+        // 面板形状：allow_migration / sticky_minutes / target_ratio
+        if ('allow_migration' in parsed || 'sticky_minutes' in parsed) {
+          return {
+            block_migration: parsed.allow_migration === false,
+            max_idle_seconds: Math.max(60, (Number(parsed.sticky_minutes) || 10) * 60),
+            target_ratio: Number(parsed.target_ratio) || 0.8,
+          }
+        }
+        return {
+          max_idle_seconds: Number(parsed.max_idle_seconds) || 60,
+          block_migration: parsed.block_migration === true,
+          target_ratio: Number(parsed.target_ratio) || 0.8,
+        }
+      }
+    }
+  } catch {}
   const cache = routing?.codex?.cache || {}
   let plan = 'default'
   try {
@@ -322,7 +364,7 @@ export function pickCodexCandidates(
   // 缓存守护：Pro 档的会话一旦绑号，宁可等它恢复也不换号——换一次就把
   // 已经滚起来的前缀缓存全丢掉，TTFT 会从 3s 跳到 30s。
   if (boundLeft && bound?.vmId) {
-    const policy = cacheGuardPolicy(routing, projectRoot, bound.vmId)
+    const policy = cacheGuardPolicy(routing, projectRoot, bound.vmId, req)
     const idleOk = cacheGuardIdleWithin(policy, bound)
     if (policy.block_migration && idleOk) {
       return { error: 'cache_hold', ids: [], sessionKey, stickyKeys, boundVmId: bound.vmId, retry_after_s: 5 }
@@ -1013,12 +1055,25 @@ export async function handleCodexProtocol({
             ? inboundSession.session_id ||
               resolveOutboundSessionId(callerSession, { ...sessionOptions, mode: 'passthrough', officialClient: true })
             : resolveOutboundSessionId(callerSession, { ...sessionOptions, mode: sessionMode })
+        let forcedPreviousId = null
+        if (!inboundSession.previous_response_id && cacheContinueFor(req)) {
+          forcedPreviousId = recallResponseId({ vmId: vm.id, sessionKey: picked.sessionKey || outboundSessionId })
+        }
         const session = {
           session_id: outboundSessionId,
-          previous_response_id: inboundSession.previous_response_id,
+          previous_response_id: inboundSession.previous_response_id || forcedPreviousId,
         }
+        if (forcedPreviousId) logBag.cache_continue_applied = true
         logBag.outbound_session_id = sessionIdForLog(outboundSessionId)
         const outboundBody = applyCodexRebuildBody({ ...converted.body, stream: true }, outboundSessionId, sessionMode)
+        // 缓存配比：按 key 的目标命中率，主动打散一部分会话（每轮换缓存键）。
+        // 契约：只有配了 target_ratio 的 key 才参与；采样按 session 稳定，同一会话不会忽打忽不打。
+        const cacheKeyId = req?.apiKeyId || req?.api_key_id || null
+        const bustPermille = cacheKeyId ? bustPermilleFor(cacheKeyId) : 0
+        if (bustPermille > 0 && shouldBustSession(cacheKeyId, picked.sessionKey || outboundSessionId, bustPermille)) {
+          outboundBody.prompt_cache_key = `${outboundSessionId}:bust:${Date.now().toString(36)}`
+          logBag.cache_busted = true
+        }
         const outboundHeaders = codexKernelHeaders(req.headers, outboundBody, session)
         if (captureOutbound) logBag.outbound_body = outboundBody
         logBag.outbound_headers = redactHeaders(outboundHeaders)
@@ -1055,6 +1110,15 @@ export async function handleCodexProtocol({
               if (seen) streamedUsage = mergeUsage(streamedUsage, seen)
               const imageGen = imageGenUsageFromSseLine(line)
               if (imageGen) streamedImageUsage = imageGen
+              const completedId = responseIdFromSseLine(line)
+              if (completedId) {
+                rememberResponseId({
+                  vmId: vm.id,
+                  sessionKey: picked.sessionKey || outboundSessionId,
+                  responseId: completedId,
+                  model: streamedResponseModel || converted.body?.model || null,
+                })
+              }
               const respModel = responseModelFromSseLine(line)
               if (respModel && !streamedResponseModel) streamedResponseModel = respModel
               const respEffort = responseEffortFromSseLine(line)

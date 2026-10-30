@@ -258,6 +258,7 @@ function stripUnsupportedCodexFields(body = {}) {
   delete next.max_output_tokens
   delete next.max_tokens
   delete next.temperature
+  // Codex 端点不支持 prompt_cache_retention（实测 400 Unsupported parameter），必须丢掉
   delete next.prompt_cache_retention
   const effort = normalizeCodexReasoningEffort(next.reasoning?.effort || next.reasoning_effort)
   delete next.reasoning_effort
