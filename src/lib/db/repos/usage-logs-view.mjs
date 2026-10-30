@@ -516,18 +516,41 @@ export class UsageLogsView {
         .map((r) => `${r.vm_id}\u0000${r.model || r.requested_model}`),
     )
     if (pairs.length) {
+      // 探针结论的真实来源是 ticket_snapshots.probe_verdict（打票/探针都会写），
+      // 不是 iq_task_runs —— 之前查错了表，导致日志页永远显示「未验」。
       try {
         const found = this.db
           .prepare(
-            `SELECT vm_id, model, verdict, started_at, question_id FROM (
-               SELECT vm_id, model, verdict, started_at, question_id,
+            `SELECT vm_id, model, probe_verdict AS verdict,
+                    COALESCE(probe_at, checked_at) AS started_at
+               FROM (
+                 SELECT vm_id, model, probe_verdict, probe_at, checked_at,
+                        ROW_NUMBER() OVER (
+                          PARTITION BY vm_id, model
+                          ORDER BY COALESCE(probe_at, checked_at) DESC
+                        ) AS rn
+                   FROM ticket_snapshots
+                  WHERE probe_verdict IS NOT NULL
+               ) WHERE rn = 1`,
+          )
+          .all()
+        for (const item of found) probe.set(`${item.vm_id}\u0000${item.model}`, item)
+      } catch {}
+      try {
+        const found = this.db
+          .prepare(
+            `SELECT vm_id, model, verdict, started_at FROM (
+               SELECT vm_id, model, verdict, started_at,
                       ROW_NUMBER() OVER (PARTITION BY vm_id, model ORDER BY started_at DESC) AS rn
                  FROM iq_task_runs
                 WHERE question_id = 'probe'
              ) WHERE rn = 1`,
           )
           .all()
-        for (const item of found) probe.set(`${item.vm_id}\u0000${item.model}`, item)
+        for (const item of found) {
+          const key = `${item.vm_id}\u0000${item.model}`
+          if (!probe.has(key)) probe.set(key, item)
+        }
       } catch {}
     }
     return rows.map((row) => {
