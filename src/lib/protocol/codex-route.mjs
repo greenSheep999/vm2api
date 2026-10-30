@@ -127,6 +127,7 @@ export function normalizeCodexTicketPolicy(raw = {}) {
     window_cost_hours: Number(src.window_cost_hours) > 0 ? Math.min(168, Number(src.window_cost_hours)) : 5,
     rpm_strategy: src.rpm_strategy === 'sticky_exempt' ? 'sticky_exempt' : 'tiered',
     compact_mode: ['auto', 'on', 'off'].includes(src.compact_mode) ? src.compact_mode : 'auto',
+    cache: normalizeCachePolicy(src.cache),
     edge_auto: src.edge_auto !== false,
     edge_auto_interval_seconds: int(src.edge_auto_interval_seconds, 600, 60, 86_400),
     overflow_to_any_plan: src.overflow_to_any_plan === true,
@@ -255,6 +256,26 @@ export function inferenceWebsocketEnabled(routing = {}) {
 
 export function computedUpstreamTransport(routing = {}) {
   return inferenceWebsocketEnabled(routing) ? normalizeUpstreamTransport(routing.codex?.upstream_transport) : 'http'
+}
+
+function normalizeCacheEntry(entry) {
+  const e = entry && typeof entry === 'object' ? entry : {}
+  return {
+    max_idle_seconds: Math.max(0, Math.min(3600, Number(e.max_idle_seconds) || 60)),
+    block_migration: e.block_migration === true,
+    target_ratio: Math.max(0, Math.min(1, Number(e.target_ratio) || 0.8)),
+  }
+}
+
+/** 缓存策略只认 pro / prolite / plus 三档，其余走 default。 */
+export function normalizeCachePolicy(raw) {
+  const src = raw && typeof raw === 'object' ? raw : {}
+  return {
+    pro: normalizeCacheEntry(src.pro),
+    prolite: normalizeCacheEntry(src.prolite),
+    plus: normalizeCacheEntry(src.plus),
+    default: normalizeCacheEntry(src.default),
+  }
 }
 
 export function normalizeCodexRouting(raw = {}) {

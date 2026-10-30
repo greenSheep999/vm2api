@@ -2191,6 +2191,30 @@ export function createPanelHandler(ctx) {
         }
       }
 
+      // GET /api/panel/ops/cache/stats — 缓存命中率（按套餐 × 空闲间隔、按槽位）
+      if (req.method === 'GET' && p === '/api/panel/ops/cache/stats') {
+        const { cacheStats } = await import('./cache-lab.mjs')
+        const hours = Number(url.searchParams.get('hours')) || 12
+        return json(res, 200, { ok: true, data: cacheStats(cfg.paths.project, { hours }) })
+      }
+
+      // POST /api/panel/ops/cache/test — 主动缓存测试（同会话连发，量命中率）
+      if (req.method === 'POST' && p === '/api/panel/ops/cache/test') {
+        const body = await readBody(req, 8192).catch(() => ({}))
+        const vmId = String(body?.vm_id || '').trim()
+        if (!vmId) return json(res, 400, { ok: false, error: { message: 'vm_id required' } })
+        const { runCacheTest } = await import('./cache-lab.mjs')
+        const result = await runCacheTest({
+          projectRoot: cfg.paths.project,
+          vmId,
+          model: String(body?.model || 'gpt-6-astra'),
+          count: Number(body?.count) || 3,
+          gapMs: Number(body?.gap_ms) || 0,
+          padTokens: Number(body?.pad_tokens) || 1500,
+        })
+        return json(res, result.ok ? 200 : 400, { ok: result.ok, data: result })
+      }
+
       // GET /api/panel/ops/edge-ips — 当前边缘节点（手填优先，否则 DNS 自动解析）
       if (req.method === 'GET' && p === '/api/panel/ops/edge-ips') {
         const { resolveEdgeIps } = await import('./ticket-harvest.mjs')

@@ -231,6 +231,26 @@ function pinnedVmId(req) {
  * A request that continues a stored response (`previous_response_id`) can
  * only run where that response lives.
  */
+
+/** 取该槽位套餐对应的缓存策略；读不到就退回 default。 */
+function cacheGuardPolicy(routing, projectRoot, vmId) {
+  const cache = routing?.codex?.cache || {}
+  let plan = 'default'
+  try {
+    const vm = getVm(projectRoot, vmId)
+    plan = String(vm?.codex?.plan_type || vm?.plan_type || 'default').toLowerCase()
+  } catch {}
+  return cache[plan] || cache.default || { max_idle_seconds: 60, block_migration: false, target_ratio: 0.8 }
+}
+
+/** 只有「距离上次使用还不算久」时才值得守缓存；放太久就正常迁移。 */
+function cacheGuardIdleWithin(policy, bound) {
+  const last = Number(bound?.lastUsedAt || bound?.last_used_at || 0)
+  if (!last) return true
+  const idleSeconds = (Date.now() - last) / 1000
+  return idleSeconds <= Math.max(0, Number(policy?.max_idle_seconds) || 60)
+}
+
 export function pickCodexCandidates(
   projectRoot,
   req,
@@ -299,6 +319,15 @@ export function pickCodexCandidates(
   })
   // A resting home migrates the conversation like a gone one: the next slot rebinds it.
   const boundLeft = ordered.boundState === 'gone' || ordered.boundState === 'resting'
+  // 缓存守护：Pro 档的会话一旦绑号，宁可等它恢复也不换号——换一次就把
+  // 已经滚起来的前缀缓存全丢掉，TTFT 会从 3s 跳到 30s。
+  if (boundLeft && bound?.vmId) {
+    const policy = cacheGuardPolicy(routing, projectRoot, bound.vmId)
+    const idleOk = cacheGuardIdleWithin(policy, bound)
+    if (policy.block_migration && idleOk) {
+      return { error: 'cache_hold', ids: [], sessionKey, stickyKeys, boundVmId: bound.vmId, retry_after_s: 5 }
+    }
+  }
   if (bound?.vmId && sessionKey && boundLeft) {
     for (const key of stickyKeys.length ? stickyKeys : [sessionKey]) stickyRouter?.unbind?.(key)
     try {
@@ -1259,6 +1288,18 @@ function rejectCodexAdmission({ res, json, stats, logBag, picked, model }) {
         type: 'invalid_request_error',
         code: 'platform_mismatch',
         message: `vm '${picked.pin}' is not a GPT slot`,
+      },
+    })
+  }
+  if (picked.error === 'cache_hold') {
+    // 守缓存：会话绑定的号只是暂时不可用，等它回来比换号更划算。
+    const wait = Math.max(1, Number(picked.retry_after_s) || 5)
+    res.setHeader?.('retry-after', String(wait))
+    return json(res, 429, {
+      error: {
+        type: 'rate_limit_error',
+        code: 'cache_hold',
+        message: `当前会话正在等待原账号恢复以保住缓存，请 ${wait} 秒后重试`,
       },
     })
   }

@@ -12,7 +12,8 @@ import {
   type OpsTabId,
 } from './navigation'
 import type { OpsSummary } from './types'
-import { CachePane, IqPane, SchedPane } from './panes'
+import { IqPane, SchedPane } from './panes'
+import { CacheLabPane } from './cache-pane'
 import { HarvestPane } from './harvest-pane'
 
 export function opsSummaryQueryOptions(hours = 24) {
@@ -66,7 +67,7 @@ export function OpsPage() {
               <>
                 {tab === 'ticket' ? <HarvestPane /> : null}
                 {tab === 'iq' ? <IqPane /> : null}
-                {tab === 'cache' ? <CachePane data={summary.data} /> : null}
+                {tab === 'cache' ? <CacheLabPane /> : null}
                 {tab === 'sched' ? <SchedPane data={summary.data} /> : null}
               </>
             ) : null}
