@@ -2779,11 +2779,20 @@ export function createPanelHandler(ctx) {
         const hasWeight = has('weight')
         // 上游传输方式（ws/http）也允许走批量入口，和单槽 PATCH 保持一致。
         const hasTransport = has('transport')
+        const hasCodexSettings = has('codex_settings')
         const hasLevel = has('schedule_level')
         const hasConc = has('max_concurrency')
         const hasRpm = has('max_rpm')
         const hasSessions = has('max_sessions')
-        if (!hasWeight && !hasLevel && !hasConc && !hasRpm && !hasSessions && !hasTransport) {
+        if (
+          !hasWeight &&
+          !hasLevel &&
+          !hasConc &&
+          !hasRpm &&
+          !hasSessions &&
+          !hasTransport &&
+          !hasCodexSettings
+        ) {
           return json(res, 400, {
             ok: false,
             error: {
@@ -3279,6 +3288,44 @@ export function createPanelHandler(ctx) {
             policy: { ...(record.policy || {}), weight: nextWeight },
           }))
           if (!vm) return json(res, 404, { ok: false, error: { message: 'vm not found' } })
+        }
+
+        // 传输方式与 Codex 槽位设置：之前只做了参数校验，没有真正写盘，
+        // 表现是接口返回 ok 但 vm 文件里 transport / codex.settings 一直是空的。
+        if (hasTransport || hasCodexSettings) {
+          const written = patchVmRecord(cfg.paths.project, id, (record) => {
+            const patch = {}
+            if (hasTransport) {
+              const transport = { ...(record.transport || {}) }
+              const upstream = String(body?.transport?.upstream || '').trim()
+              const wsMode = String(body?.transport?.ws_mode || '').trim()
+              if (upstream === 'ws' || upstream === 'http') transport.upstream = upstream
+              else if (upstream) delete transport.upstream
+              if (['ctx_pool', 'passthrough', 'http_bridge', 'off'].includes(wsMode)) {
+                transport.ws_mode = wsMode
+                transport.upstream = wsMode === 'off' ? 'http' : 'ws'
+              } else if (wsMode) {
+                delete transport.ws_mode
+              }
+              patch.transport = Object.keys(transport).length ? transport : null
+            }
+            if (hasCodexSettings) {
+              const incoming = body?.codex_settings || {}
+              const settings = { ...(record.codex?.settings || {}) }
+              if (['off', 'device', 'session', 'full'].includes(incoming.fingerprint_mode)) {
+                settings.fingerprint_mode = incoming.fingerprint_mode
+              }
+              if (typeof incoming.allow_official_only === 'boolean') {
+                settings.allow_official_only = incoming.allow_official_only
+              }
+              if (['auto', 'on', 'off'].includes(incoming.compact_mode)) {
+                settings.compact_mode = incoming.compact_mode
+              }
+              patch.codex = { ...(record.codex || {}), settings }
+            }
+            return patch
+          })
+          if (!written) return json(res, 404, { ok: false, error: { message: 'vm not found' } })
         }
         let memoryRaiseResult = null
         if (hasMemory) {
