@@ -1,147 +1,411 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { toast } from 'sonner'
+import { CacheControlSection, CacheObserveSection } from './cache-control'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { cn } from '@/lib/utils'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
-type BucketRow = { plan: string; bucket: string; samples: number; hitRatio: number }
-type SlotRow = { vmId: string; plan: string; samples: number; hitRatio: number }
-type Stats = { bucketRows: BucketRow[]; slotRows: SlotRow[]; hours: number }
-type TestRound = { round: number; cachedTokens: number; inputTokens: number; hitRatio: number; ttftMs: number | null }
-
-const BUCKET_ORDER = ['0-1min', '1-5min', '5-15min', '15-60min', '1-6h', '>6h']
-
-function pct(v: number) {
-  return `${(v * 100).toFixed(1)}%`
+type ApiKey = { id: string; name: string; group_type?: string; category?: string }
+type Round = {
+  round: number
+  status: number
+  vmId?: string | null
+  inputTokens: number
+  cachedTokens: number
+  cacheWriteTokens: number
+  outputTokens: number
+  hitRatio: number
+  textSnippet?: string
+  totalMs?: number
+  error?: string
+}
+type TestResult = {
+  ok: boolean
+  model: string
+  prefixParagraphs: number
+  rounds: number
+  intervalMs: number
+  results: Round[]
+  summary: {
+    firstHitRatio: number | null
+    repeatHitRatio: number | null
+    cacheReadTokens: number
+    completedRounds: number
+  }
 }
 
-function tone(v: number) {
-  return v >= 0.8 ? 'text-emerald-600 dark:text-emerald-400' : v >= 0.5 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'
+
+const MOCK_PREVIEW: TestResult = {
+  ok: true,
+  model: 'gpt-5.6-sol',
+  prefixParagraphs: 48,
+  rounds: 3,
+  intervalMs: 1000,
+  results: [
+    { round: 1, status: 200, vmId: 'vm-gpt-03', inputTokens: 12500, cachedTokens: 0, cacheWriteTokens: 0, outputTokens: 256, hitRatio: 0, textSnippet: 'OK', totalMs: 4213 },
+    { round: 2, status: 200, vmId: 'vm-gpt-03', inputTokens: 12500, cachedTokens: 12096, cacheWriteTokens: 0, outputTokens: 256, hitRatio: 12096 / 24596, textSnippet: 'OK', totalMs: 1680 },
+    { round: 3, status: 200, vmId: 'vm-gpt-03', inputTokens: 12500, cachedTokens: 12420, cacheWriteTokens: 0, outputTokens: 256, hitRatio: 12420 / 24920, textSnippet: 'OK', totalMs: 1655 },
+  ],
+  summary: { firstHitRatio: 0, repeatHitRatio: (12096 / 24596 + 12420 / 24920) / 2, cacheReadTokens: 24516, completedRounds: 3 },
 }
 
-/**
- * 缓存实验台：命中率随空闲间隔的变化 + 主动测试。
- * 「缓存比例」不是能直接设的数字，而是由空闲间隔、是否换号、请求键是否稳定共同决定。
- */
+const MODELS = ['gpt-6-astra', 'gpt-6.1-sol', 'gpt-6-sol', 'gpt-5.6-sol', 'gpt-5.6-luna']
+const EFFORTS = ['', 'low', 'medium', 'high', 'xhigh']
+
+function pct(v: number | null | undefined) {
+  return v == null ? '—' : `${(v * 100).toFixed(1)}%`
+}
+function num(v: number | null | undefined) {
+  return v == null ? '—' : v.toLocaleString()
+}
+
+/** 缓存模块：控制（按 key 策略）→ 观测（谁在拖低命中率）→ 测试（验证效果）。 */
 export function CacheLabPane() {
-  const [vmId, setVmId] = useState('vm-gpt-03')
-  const [model, setModel] = useState('gpt-6-astra')
-  const [count, setCount] = useState(3)
-  const [gapSec, setGapSec] = useState(5)
-
-  const stats = useQuery({
-    queryKey: ['ops-cache-stats'],
-    queryFn: () => api<Stats>('/api/panel/ops/cache/stats?hours=12'),
-    refetchInterval: 60_000,
+  const keys = useQuery({
+    queryKey: ['api-keys-for-cache'],
+    queryFn: () => api<{ items: ApiKey[] }>('/api/panel/api-keys'),
   })
+  const [keyId, setKeyId] = useState('')
+  const [model, setModel] = useState('gpt-5.6-sol')
+  const [protocol, setProtocol] = useState('responses')
+  const [rounds, setRounds] = useState(3)
+  const [prefixParagraphs, setPrefixParagraphs] = useState(48)
+  const [intervalMs, setIntervalMs] = useState(1000)
+  const [timeoutSec, setTimeoutSec] = useState(120)
+  const [maxOutput, setMaxOutput] = useState(256)
+  const [effort, setEffort] = useState('')
+  const [advanced, setAdvanced] = useState(false)
+  const [history, setHistory] = useState<TestResult[]>([])
+
+  const list = keys.data?.items || []
+  const isMock = list.some((k) => String(k.id).startsWith('key_mock'))
+  if (!keyId && list.length) {
+    // 首次加载自动选第一个 Key，省掉「按钮灰着不知道要点哪」的困惑
+    setTimeout(() => setKeyId(list[0].id), 0)
+  }
+  const currentKey = useMemo(() => list.find((k) => k.id === keyId) || null, [list, keyId])
 
   const test = useMutation({
     mutationFn: () =>
-      api<{ ok: boolean; results: TestRound[]; reason?: string }>('/api/panel/ops/cache/test', {
+      api<TestResult>('/api/panel/ops/cache/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ vm_id: vmId, model, count, gap_ms: gapSec * 1000 }),
+        body: JSON.stringify({
+          key_id: keyId,
+          model,
+          rounds,
+          prefix_paragraphs: prefixParagraphs,
+          interval_ms: intervalMs,
+          timeout_s: timeoutSec,
+          max_output_tokens: maxOutput,
+          effort: effort || null,
+        }),
       }),
     onSuccess: (r) => {
-      if (!r?.ok) toast.warning(`测试未成功：${r?.reason || 'unknown'}`)
-      else toast.success(`完成 ${r.results.length} 发`)
+      setHistory((h) => [r, ...h].slice(0, 20))
+      if (!r?.ok) toast.warning(`未全部成功：${r.summary.completedRounds}/${r.rounds} 完成`)
+      else toast.success('测试完成')
     },
     onError: (e) => toast.error(`测试失败：${(e as Error).message}`),
   })
 
-  const plans = [...new Set((stats.data?.bucketRows || []).map((r) => r.plan))].sort()
+  // mock 模式下自动跑一次，直接看到结果表长什么样（真实模式绝不自动跑，会真扣费）
+  const autoRan = useRef(false)
+  useEffect(() => {
+    if (!isMock || autoRan.current || !keyId) return
+    autoRan.current = true
+    test.mutate()
+  }, [isMock, keyId, test])
+
+  const result = test.data ?? (isMock ? MOCK_PREVIEW : null)
+  const rows = result?.results || []
 
   return (
     <div className='space-y-4'>
-      <section className='rounded-lg border p-3'>
-        <h4 className='text-sm font-semibold'>命中率 × 空闲间隔（近 12 小时真实流量）</h4>
-        <div className='mt-2 overflow-x-auto'>
-          <table className='w-full text-[11px]'>
-            <thead>
-              <tr className='text-muted-foreground'>
-                <th className='py-1 text-left'>套餐</th>
-                {BUCKET_ORDER.map((b) => (
-                  <th key={b} className='py-1 text-right'>{b}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {plans.map((p) => (
-                <tr key={p} className='border-t'>
-                  <td className='py-1 font-mono'>{p}</td>
-                  {BUCKET_ORDER.map((b) => {
-                    const row = (stats.data?.bucketRows || []).find((r) => r.plan === p && r.bucket === b)
-                    return (
-                      <td key={b} className={cn('py-1 text-right tabular-nums', row ? tone(row.hitRatio) : 'text-muted-foreground')}>
-                        {row ? `${pct(row.hitRatio)} (${row.samples})` : '—'}
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {isMock ? (
+        <div className='rounded-md border border-blue-300/60 bg-blue-50/60 px-3 py-1.5 text-[11px] text-blue-700 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300'>
+          当前是 MOCK 数据：Key、策略、命中率、测试结果都是假的，用来确认页面效果。
         </div>
-        <p className='mt-2 text-[11px] text-muted-foreground'>
-          括号里是样本数。间隔超过 1 分钟后命中率普遍掉到 50% 以下——上游前缀缓存的滚动窗口很短。
+      ) : null}
+      <CacheControlSection />
+      <CacheObserveSection />
+      <div className='grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]'>
+      {/* 左：测试配置 */}
+      <section className='space-y-3 rounded-lg border p-3'>
+        <h4 className='text-sm font-semibold'>测试配置</h4>
+        <p className='text-[11px] text-muted-foreground'>
+          用真实 Key 重复发送相同前缀，对比首轮与重复轮次的缓存读取。
         </p>
-      </section>
 
-      <section className='rounded-lg border p-3'>
-        <h4 className='text-sm font-semibold'>按槽位</h4>
-        <div className='mt-2 divide-y'>
-          {(stats.data?.slotRows || []).map((s) => (
-            <div key={s.vmId} className='flex items-center justify-between py-1 text-[11px]'>
-              <span className='font-mono'>{s.vmId}</span>
-              <span className='text-muted-foreground'>{s.plan} · {s.samples} 发</span>
-              <span className={cn('tabular-nums', tone(s.hitRatio))}>{pct(s.hitRatio)}</span>
+        <div className='space-y-1'>
+          <Label className='text-[11px]'>我的 API Key</Label>
+          <Select value={keyId} onValueChange={setKeyId}>
+            <SelectTrigger className='h-8 w-full text-[11px]'>
+              <SelectValue placeholder='选择一个 Key' />
+            </SelectTrigger>
+            <SelectContent>
+              {list.map((k) => (
+                <SelectItem key={k.id} value={k.id} className='text-[11px]'>
+                  {k.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className='space-y-1'>
+          <Label className='text-[11px]'>接口协议</Label>
+          <Select value={protocol} onValueChange={setProtocol}>
+            <SelectTrigger className='h-8 w-full text-[11px]'>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value='responses' className='text-[11px]'>Responses</SelectItem>
+              <SelectItem value='chat' className='text-[11px]' disabled>
+                Chat Completions（暂不支持）
+              </SelectItem>
+              <SelectItem value='messages' className='text-[11px]' disabled>
+                Messages（暂不支持）
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className='space-y-1'>
+          <Label className='text-[11px]'>模型</Label>
+          <Select value={model} onValueChange={setModel}>
+            <SelectTrigger className='h-8 w-full text-[11px]'>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {MODELS.map((m) => (
+                <SelectItem key={m} value={m} className='text-[11px]'>
+                  {m}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className='grid grid-cols-2 gap-2'>
+          <div className='space-y-1'>
+            <Label className='text-[11px]'>请求轮数</Label>
+            <Select value={String(rounds)} onValueChange={(v) => setRounds(Number(v))}>
+              <SelectTrigger className='h-8 w-full text-[11px]'>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[2, 3, 5, 8, 10].map((n) => (
+                  <SelectItem key={n} value={String(n)} className='text-[11px]'>
+                    {n}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className='space-y-1'>
+            <Label className='text-[11px]'>固定前缀长度</Label>
+            <Select value={String(prefixParagraphs)} onValueChange={(v) => setPrefixParagraphs(Number(v))}>
+              <SelectTrigger className='h-8 w-full text-[11px]'>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[12, 24, 48, 96, 160].map((n) => (
+                  <SelectItem key={n} value={String(n)} className='text-[11px]'>
+                    {n} 段
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <p className='text-[10px] leading-relaxed text-muted-foreground'>
+          约 {Math.round(prefixParagraphs * 132).toLocaleString()} 个字符，全部为合成内容。字符数不等于 token 数，不同模型的缓存门槛不同。
+        </p>
+
+        <button
+          type='button'
+          className='text-left text-[11px] text-muted-foreground hover:text-foreground'
+          onClick={() => setAdvanced((v) => !v)}
+        >
+          {advanced ? '▲ 收起高级设置' : '▼ 高级设置'}
+        </button>
+
+        {advanced ? (
+          <div className='space-y-2'>
+            <div className='space-y-1'>
+              <Label className='text-[11px]'>轮次间隔（毫秒）</Label>
+              <Input
+                type='number'
+                min={0}
+                step={500}
+                className='h-8 w-full text-[11px]'
+                value={intervalMs}
+                onChange={(e) => setIntervalMs(Number(e.target.value) || 0)}
+              />
             </div>
-          ))}
-          {!stats.data?.slotRows?.length ? <p className='py-2 text-[11px] text-muted-foreground'>暂无数据</p> : null}
+            <div className='space-y-1'>
+              <Label className='text-[11px]'>单轮超时</Label>
+              <Select value={String(timeoutSec)} onValueChange={(v) => setTimeoutSec(Number(v))}>
+                <SelectTrigger className='h-8 w-full text-[11px]'>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {[30, 60, 120, 300].map((n) => (
+                    <SelectItem key={n} value={String(n)} className='text-[11px]'>
+                      {n} s
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className='space-y-1'>
+              <Label className='text-[11px]'>最大输出 token</Label>
+              <Input
+                type='number'
+                min={16}
+                max={4096}
+                className='h-8 w-full text-[11px]'
+                value={maxOutput}
+                onChange={(e) => setMaxOutput(Number(e.target.value) || 256)}
+              />
+            </div>
+            <div className='space-y-1'>
+              <Label className='text-[11px]'>推理强度</Label>
+              <Select value={effort || 'none'} onValueChange={(v) => setEffort(v === 'none' ? '' : v)}>
+                <SelectTrigger className='h-8 w-full text-[11px]'>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value='none' className='text-[11px]'>不指定</SelectItem>
+                  {EFFORTS.filter(Boolean).map((e) => (
+                    <SelectItem key={e} value={e} className='text-[11px]'>
+                      {e}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        ) : null}
+
+        <div className='rounded-md border border-amber-300/60 bg-amber-50/60 p-2 text-[10px] leading-relaxed text-amber-800 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300'>
+          开始后会真实发送 {rounds} 次计费请求；单轮失败即停止，不自动重试。停止或超时前已处理的内容仍可能计费。
         </div>
+
+        <Button
+          size='sm'
+          variant={test.isPending ? 'outline' : 'default'}
+          className='h-8 w-full text-[11px]'
+          disabled={!keyId}
+          loading={test.isPending}
+          onClick={() => (test.isPending ? test.reset() : test.mutate())}
+        >
+          {test.isPending ? '停止' : '开始计费测试'}
+        </Button>
       </section>
 
-      <section className='rounded-lg border p-3'>
-        <h4 className='text-sm font-semibold'>主动测试</h4>
-        <div className='mt-2 grid gap-2 sm:grid-cols-4'>
-          <div className='space-y-1'>
-            <Label className='text-[11px]'>槽位</Label>
-            <Input className='h-8 text-xs' value={vmId} onChange={(e) => setVmId(e.target.value)} />
-          </div>
-          <div className='space-y-1'>
-            <Label className='text-[11px]'>模型</Label>
-            <Input className='h-8 text-xs' value={model} onChange={(e) => setModel(e.target.value)} />
-          </div>
-          <div className='space-y-1'>
-            <Label className='text-[11px]'>连发次数</Label>
-            <Input type='number' min={1} max={10} className='h-8 text-xs' value={count} onChange={(e) => setCount(Number(e.target.value) || 1)} />
-          </div>
-          <div className='space-y-1'>
-            <Label className='text-[11px]'>间隔（秒）</Label>
-            <Input type='number' min={0} max={120} className='h-8 text-xs' value={gapSec} onChange={(e) => setGapSec(Number(e.target.value) || 0)} />
-          </div>
+      {/* 右：结果 */}
+      <section className='space-y-3 rounded-lg border p-3'>
+        <div className='flex flex-wrap items-baseline justify-between gap-2'>
+          <h4 className='text-sm font-semibold'>测试结果</h4>
+          <span className='text-[11px] text-muted-foreground'>
+            {currentKey?.name || '—'} · {model} · /v1/responses
+          </span>
         </div>
-        <Button size='sm' className='mt-2 h-8 text-xs' loading={test.isPending} onClick={() => test.mutate()}>
-          开始测试
-        </Button>
-        {test.data?.results?.length ? (
-          <div className='mt-2 space-y-1'>
-            {test.data.results.map((r) => (
-              <div key={r.round} className='flex items-center justify-between text-[11px]'>
-                <span>第 {r.round} 发</span>
-                <span className='text-muted-foreground'>
-                  缓存 {r.cachedTokens} / 输入 {r.inputTokens}
-                </span>
-                <span className={cn('tabular-nums', tone(r.hitRatio))}>{pct(r.hitRatio)}</span>
-                <span className='tabular-nums text-muted-foreground'>{r.ttftMs ?? '—'}ms</span>
-              </div>
-            ))}
+
+        {result ? (
+          <>
+            <p className='text-[11px] text-muted-foreground'>
+              前缀 {result.prefixParagraphs} 段 · 输出上限 {maxOutput} · 间隔 {result.intervalMs}ms · 槽位 {rows[0]?.vmId || '按调度'}
+            </p>
+            <div className='grid gap-2 sm:grid-cols-4'>
+              <Stat label='首轮命中率' value={pct(result.summary.firstHitRatio)} />
+              <Stat label='重复轮次命中率' value={pct(result.summary.repeatHitRatio)} />
+              <Stat label='缓存读取' value={num(result.summary.cacheReadTokens)} />
+              <Stat label='完成轮次' value={`${result.summary.completedRounds}/${result.rounds}`} />
+            </div>
+            <p className='text-[10px] leading-relaxed text-muted-foreground'>
+              命中率按缓存读取 ÷（总输入 + 缓存读取）计算，数据来自网关响应，不保证上游物理缓存。
+            </p>
+            <div className='overflow-x-auto'>
+              <table className='w-full text-[11px]'>
+                <thead>
+                  <tr className='text-muted-foreground'>
+                    <th className='py-1 text-left'>轮次</th>
+                    <th className='py-1 text-right'>总输入</th>
+                    <th className='py-1 text-right'>缓存读取</th>
+                    <th className='py-1 text-right'>缓存写入</th>
+                    <th className='py-1 text-right'>命中率</th>
+                    <th className='py-1 text-right'>输出</th>
+                    <th className='py-1 text-left'>首段文本</th>
+                    <th className='py-1 text-right'>耗时</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={r.round} className='border-t'>
+                      <td className='py-1'>{r.round === 1 ? '首轮' : `第 ${r.round} 轮`}</td>
+                      <td className='py-1 text-right tabular-nums'>{num(r.inputTokens)}</td>
+                      <td className='py-1 text-right tabular-nums'>{num(r.cachedTokens)}</td>
+                      <td className='py-1 text-right tabular-nums'>{num(r.cacheWriteTokens)}</td>
+                      <td className='py-1 text-right tabular-nums'>{r.status === 200 ? pct(r.hitRatio) : '失败'}</td>
+                      <td className='py-1 text-right tabular-nums'>{num(r.outputTokens)}</td>
+                      <td className='max-w-[220px] truncate py-1 text-muted-foreground'>{r.textSnippet || r.error || '—'}</td>
+                      <td className='py-1 text-right tabular-nums text-muted-foreground'>{r.totalMs ?? '—'}ms</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        ) : (
+          <p className='py-10 text-center text-[11px] text-muted-foreground'>选好 Key 与模型后开始测试，结果显示在这里</p>
+        )}
+
+        {history.length ? (
+          <div className='border-t pt-2'>
+            <div className='flex items-center justify-between'>
+              <span className='text-[11px] font-medium'>本地测试历史</span>
+              <button
+                type='button'
+                className='text-[10px] text-muted-foreground hover:text-foreground'
+                onClick={() => setHistory([])}
+              >
+                清空历史
+              </button>
+            </div>
+            <div className='mt-1 space-y-0.5'>
+              {history.slice(0, 6).map((h, i) => (
+                <div key={`${h.model}-${i}`} className='flex items-center justify-between text-[10px] text-muted-foreground'>
+                  <span className='font-mono'>{h.model}</span>
+                  <span>首轮 {pct(h.summary.firstHitRatio)} · 重复 {pct(h.summary.repeatHitRatio)}</span>
+                  <span>{h.summary.completedRounds}/{h.rounds}</span>
+                </div>
+              ))}
+            </div>
           </div>
         ) : null}
       </section>
+      </div>
+    </div>
+  )
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className='rounded-md border px-2 py-1.5'>
+      <div className='text-[10px] text-muted-foreground'>{label}</div>
+      <div className='mt-0.5 font-mono text-sm tabular-nums'>{value}</div>
     </div>
   )
 }

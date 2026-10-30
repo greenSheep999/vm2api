@@ -54,9 +54,19 @@ function previewOpsAcl() {
           // 单端口 mock 模式：访问 /?mock=1#/logs 会写入 cookie，
           // 之后 usage-logs 接口返回 7 种状态的假数据（不额外开端口）。
           if (url.includes('mock=1')) {
+            // ?mock=1&to=/ops/cache → 打开 mock 并跳到指定路由（默认日志页）
+            const to = (() => {
+              try {
+                const u = new URL(url, 'http://127.0.0.1')
+                const raw = u.searchParams.get('to') || '/logs'
+                return raw.startsWith('/') ? raw : `/${raw}`
+              } catch {
+                return '/logs'
+              }
+            })()
             res.setHeader('set-cookie', 'kin_mock=1; Path=/; Max-Age=86400')
             res.statusCode = 302
-            res.setHeader('location', '/#/logs')
+            res.setHeader('location', `/#${to}`)
             res.end()
             return
           }
@@ -109,6 +119,96 @@ function previewOpsAcl() {
             } catch {
               // 拿不到底板就退回真实数据
             }
+          }
+          if (mockMode && req.method === 'GET' && url.startsWith('/api/panel/ops/cache/policies')) {
+            const body = JSON.stringify({
+              ok: true,
+              data: {
+                items: [
+                  { keyId: 'key_mock_pro', keyName: 'new-api-self', groupType: null, configured: true,
+                    policy: { allow_migration: false, sticky_minutes: 30, target_ratio: 0.85, force_continue: true } },
+                  { keyId: 'key_mock_plus', keyName: 'new-api-plus-self', groupType: null, configured: false,
+                    policy: { allow_migration: true, sticky_minutes: 10, target_ratio: 0.6, force_continue: false } },
+                ],
+              },
+            })
+            res.statusCode = 200
+            res.setHeader('content-type', 'application/json')
+            res.end(body)
+            return
+          }
+          if (mockMode && req.method === 'GET' && url.startsWith('/api/panel/ops/cache/stats')) {
+            const body = JSON.stringify({
+              ok: true,
+              data: {
+                hours: 12,
+                bucketRows: [
+                  { plan: 'pro', bucket: '0-1min', samples: 62, hitRatio: 0.891 },
+                  { plan: 'pro', bucket: '1-5min', samples: 2, hitRatio: 0.539 },
+                  { plan: 'prolite', bucket: '0-1min', samples: 586, hitRatio: 0.855 },
+                  { plan: 'prolite', bucket: '1-5min', samples: 22, hitRatio: 0.545 },
+                  { plan: 'plus', bucket: '0-1min', samples: 14, hitRatio: 0.609 },
+                  { plan: 'plus', bucket: '1-5min', samples: 17, hitRatio: 0.405 },
+                  { plan: 'plus', bucket: '1-6h', samples: 9, hitRatio: 0.315 },
+                ],
+                keyRows: [
+                  { keyId: 'key_mock_pro', keyName: 'new-api-self', samples: 721, hitRatio: 0.825, avgTtftMs: 4900 },
+                  { keyId: 'key_mock_plus', keyName: 'new-api-plus-self', samples: 32, hitRatio: 0.456, avgTtftMs: 17200 },
+                ],
+                slotRows: [
+                  { vmId: 'vm-gpt-03', plan: 'prolite', samples: 619, hitRatio: 0.845, avgTtftMs: 4691 },
+                  { vmId: 'vm-gpt-02', plan: 'pro', samples: 56, hitRatio: 0.84, avgTtftMs: 5120 },
+                  { vmId: 'vm-gpt-10', plan: 'plus', samples: 11, hitRatio: 0.662, avgTtftMs: 9800 },
+                  { vmId: 'vm-gpt-08', plan: 'plus', samples: 11, hitRatio: 0.155, avgTtftMs: 22600 },
+                ],
+              },
+            })
+            res.statusCode = 200
+            res.setHeader('content-type', 'application/json')
+            res.end(body)
+            return
+          }
+          if (mockMode && req.method === 'GET' && url.startsWith('/api/panel/api-keys')) {
+            const body = JSON.stringify({
+              ok: true,
+              data: {
+                items: [
+                  { id: 'key_mock_pro', name: 'new-api-self', group_type: null, category: 'oauth' },
+                  { id: 'key_mock_plus', name: 'new-api-plus-self', group_type: null, category: 'oauth' },
+                ],
+              },
+            })
+            res.statusCode = 200
+            res.setHeader('content-type', 'application/json')
+            res.end(body)
+            return
+          }
+          if (mockMode && req.method === 'POST' && url.startsWith('/api/panel/ops/cache/test')) {
+            const mk = (i: number, cached: number) => ({
+              round: i,
+              status: 200,
+              vmId: 'vm-gpt-03',
+              inputTokens: 12500,
+              cachedTokens: cached,
+              cacheWriteTokens: 0,
+              outputTokens: 256,
+              hitRatio: cached / (cached + 12500),
+              textSnippet: 'OK',
+              totalMs: i === 1 ? 4213 : 1680,
+            })
+            const results = [mk(1, 0), mk(2, 12096), mk(3, 12420)]
+            const body = JSON.stringify({
+              ok: true,
+              data: {
+                ok: true, model: 'gpt-5.6-sol', prefixParagraphs: 48, rounds: 3, intervalMs: 1000,
+                results,
+                summary: { firstHitRatio: 0, repeatHitRatio: (12096 / 24596 + 12420 / 24920) / 2, cacheReadTokens: 24516, completedRounds: 3 },
+              },
+            })
+            res.statusCode = 200
+            res.setHeader('content-type', 'application/json')
+            res.end(body)
+            return
           }
           const hitMe = req.method === 'GET' && url.startsWith('/api/panel/me')
           const hitSummary = req.method === 'GET' && url.startsWith('/api/panel/ops/summary')
