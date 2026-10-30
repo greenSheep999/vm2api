@@ -313,12 +313,24 @@ async function sendUpstream({ body, headers, proxyUrl, timeoutMs, idleTimeoutMs,
         if (firstByteMs == null) firstByteMs = Date.now() - startedAt
 
         // 思考期上游可能长时间不发数据：给客户端打 SSE 注释心跳，别让客户端读超时。
+        // 注意：首字之前也要打——19 万 token + xhigh 的请求，上游可能几十秒不吐任何内容，
+        // 客户端在静默期会判定连接卡死并重连（表现就是一直 Reconnecting）。
+        // 代价是心跳一旦发出就等于「已提交」，失去静默换号重试的资格；
+        // 所以只在静默超过 15 秒后才打，给早期失败留出重试窗口。
         heartbeat = setInterval(() => {
-          if (settled || !flushed || Date.now() - lastDataAt < 15_000) return
+          if (settled) return
+          if (!flushed) {
+            if (Date.now() - lastDataAt < 15_000) return
+            try {
+              onLine(': keepalive')
+            } catch {}
+            return
+          }
+          if (Date.now() - lastDataAt < 15_000) return
           try {
             onLine(': keepalive')
           } catch {}
-        }, 15_000)
+        }, 5_000)
 
         res.on('data', (chunk) => {
           lastDataAt = Date.now()
