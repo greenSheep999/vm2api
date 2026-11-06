@@ -8,6 +8,7 @@ import { getVm, listVms, persistCodexUsage, setScheduleOff, syncCodexQuotaSchedu
 import { getDb } from '../db/database.mjs'
 import { rememberResponseId, recallResponseId, responseIdFromSseLine } from '../pool/cache-continuity.mjs'
 import { bustPermilleFor, shouldBustSession } from '../pool/cache-controller.mjs'
+import { recordUpstreamFailure, recordUpstreamSuccess } from '../pool/upstream-breaker.mjs'
 import { isValidVmId } from '../vm/vm-file.mjs'
 import { isCodexProtocolAllowed, isCodexVm, normalizeCodexRouting } from './codex-route.mjs'
 import { keyAllowsVm, keyScopeFromRequest, vmPoolDenial } from '../admin/key-scope.mjs'
@@ -1151,6 +1152,8 @@ export async function handleCodexProtocol({
             },
           })
         let result = await runHop()
+        if (result && !result.error) recordUpstreamSuccess(vm.id)
+        else if (result?.error === 'upstream_closed_before_content') recordUpstreamFailure(projectRoot, vm.id)
         if (directMode && result?.effective_headers) {
           logBag.outbound_headers = redactHeaders(result.effective_headers)
         }

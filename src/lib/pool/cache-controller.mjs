@@ -74,7 +74,24 @@ export function runCacheControlTick({ windowMinutes = 30 } = {}) {
     try {
       target = Number(JSON.parse(key.cache_policy)?.target_ratio)
     } catch {}
-    if (!Number.isFinite(target) || target <= 0) continue
+    if (!Number.isFinite(target) || target <= 0) {
+      // 目标清 0 = 关闭闭环，打散必须归零，否则残留比例会继续废掉缓存。
+      const prevRow = conn
+        .prepare('SELECT bust_permille FROM cache_control_state WHERE key_id = ?')
+        .get(key.id)
+      if (Number(prevRow?.bust_permille) > 0) {
+        conn
+          .prepare(
+            `INSERT INTO cache_control_state (key_id, bust_permille, measured_ratio, samples, updated_at)
+             VALUES (?, 0, NULL, 0, ?)
+             ON CONFLICT(key_id) DO UPDATE SET bust_permille = 0, updated_at = excluded.updated_at`,
+          )
+          .run(key.id, nowIso())
+        stateCache.set(key.id, { value: 0, at: Date.now() })
+        adjusted.push({ keyId: key.id, target: 0, measured: null, prev: Number(prevRow?.bust_permille) || 0, next: 0 })
+      }
+      continue
+    }
     const agg = conn
       .prepare(
         `SELECT COUNT(*) AS n,
