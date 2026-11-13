@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -115,6 +116,7 @@ export function KeyLimitsDialog({
         name: initial.name || '',
         category: initial.category === 'api' ? 'api' : 'oauth',
         max_concurrency: Number(initial.max_concurrency ?? 20),
+        allow_overflow: initial.allow_overflow === true,
         quota_requests: Number(initial.quota_requests ?? 0),
         quota_usd: Number(initial.quota_usd ?? 0),
         rpm: Number(initial.rpm ?? 0),
@@ -196,6 +198,17 @@ export function KeyLimitsDialog({
               options={CONC}
               onChange={(n) => setDraft((d) => ({ ...d, max_concurrency: n }))}
             />
+          </Field>
+          <Field label='跨套餐溢出'>
+            <div className='flex items-center gap-2'>
+              <Switch
+                checked={draft.allow_overflow}
+                onCheckedChange={(v) => setDraft((d) => ({ ...d, allow_overflow: v }))}
+              />
+              <span className='text-[11px] text-muted-foreground'>
+                本套餐池满时允许借其它套餐（默认关闭）
+              </span>
+            </div>
           </Field>
           <Field label='请求额度'>
             <NumSelect
@@ -365,6 +378,7 @@ function blankDraft(): KeyLimitsDraft {
     name: '',
     category: 'oauth',
     max_concurrency: 20,
+    allow_overflow: false,
     quota_requests: 0,
     quota_usd: 0,
     rpm: 0,

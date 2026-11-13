@@ -237,6 +237,19 @@ function pinnedVmId(req) {
  * only run where that response lives.
  */
 
+
+/** 该 Key 是否允许跨套餐溢出（api_keys.allow_overflow，默认 0 = 不允许）。 */
+function keyAllowsOverflow(req) {
+  try {
+    const keyId = req?.apiKeyId || req?.api_key_id || null
+    if (!keyId) return false
+    const row = getDb().prepare('SELECT allow_overflow FROM api_keys WHERE id = ?').get(keyId)
+    return Number(row?.allow_overflow) === 1
+  } catch {
+    return false
+  }
+}
+
 /** 这个 Key 是否开启了「强制续接」。 */
 function cacheContinueFor(req) {
   try {
@@ -593,7 +606,9 @@ function clientGoneSignal(req, res) {
 async function admitCodexCandidate(projectRoot, req, opts, { deadline, signal }) {
   let woken = false
   // 本 key 范围内的槽位全部无额度时，溢出到其它套餐重试一次（可用关闭开关）。
-  const overflowAllowed = opts?.routing?.codex?.overflow_to_any_plan !== false && !pinnedVmId(req)
+  // 跨套餐溢出按 Key 管理：默认关闭，只有该 Key 显式打开才允许借别的套餐
+  // （历史实现读全局开关且读错节点，实际永远开着）。
+  const overflowAllowed = keyAllowsOverflow(req) === true && !pinnedVmId(req)
   let overflowTried = false
   for (;;) {
     let picked = pickCodexCandidates(projectRoot, req, opts)

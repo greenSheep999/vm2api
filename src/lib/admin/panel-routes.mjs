@@ -1692,6 +1692,9 @@ export function createPanelHandler(ctx) {
         }
         try {
           const input = normalizePanelApiKeyInput(body || {}, req)
+          if (Object.prototype.hasOwnProperty.call(body || {}, 'allow_overflow') && ident.role !== 'admin') {
+            return json(res, 403, { ok: false, error: { code: 'key_overflow_forbidden', message: '只有管理员可以设置跨套餐溢出' } })
+          }
           const currentRec = apiKeyStore.getById(id)
           const scopeInput = { group_type: body?.group_type, allowed_vms: body?.allowed_vms }
           if (ident.role === 'admin' && Object.prototype.hasOwnProperty.call(body || {}, 'vm_pool_id')) {

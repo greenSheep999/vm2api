@@ -4,6 +4,7 @@ export type KeyLimitsDraft = {
   name: string
   category: 'oauth' | 'api'
   max_concurrency: number
+  allow_overflow?: boolean
   quota_requests: number
   quota_usd: number
   rpm: number
@@ -37,6 +38,7 @@ export function keyLimitsPayload(
     quota_requests: requests,
     quota_usd: nonNegative(draft.quota_usd, 'USD 额度'),
     rpm: nonNegative(draft.rpm, 'RPM'),
+    allow_overflow: draft.allow_overflow === true,
   }
   // API 直连不经过槽位，只有管理员可以设置
   if (isAdmin) body.category = draft.category
