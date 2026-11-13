@@ -593,7 +593,10 @@ function clientGoneSignal(req, res) {
 async function admitCodexCandidate(projectRoot, req, opts, { deadline, signal }) {
   let woken = false
   // 本 key 范围内的槽位全部无额度时，溢出到其它套餐重试一次（可用关闭开关）。
-  const overflowAllowed = opts?.routing?.codex?.overflow_to_any_plan !== false && !pinnedVmId(req)
+  // 这个开关实际存在 codex.ticket 里（由 normalizeCodexTicketPolicy 归一），
+  // 之前读的是 codex 根节点，永远拿不到值 → 「关闭跨套餐溢出」从来没生效过。
+  const overflowFlag = opts?.routing?.codex?.ticket?.overflow_to_any_plan ?? opts?.routing?.codex?.overflow_to_any_plan
+  const overflowAllowed = overflowFlag === true && !pinnedVmId(req)
   let overflowTried = false
   for (;;) {
     let picked = pickCodexCandidates(projectRoot, req, opts)
