@@ -87,6 +87,7 @@ export function publicKeyView(rec, { reveal = false } = {}) {
     user_id: rec.user_id ?? null,
     group_id: rec.group_id ?? null,
     max_concurrency: rec.max_concurrency,
+    allow_overflow: Number(rec.allow_overflow) === 1,
     quota_requests: rec.quota_requests,
     // panel view keeps the historical name: quota_used = request count
     quota_used: rec.quota_requests_used ?? 0,
@@ -245,6 +246,7 @@ export class ApiKeyStore {
       tokens_in: 0,
       tokens_out: 0,
       category: String(input.category || 'oauth').toLowerCase() === 'api' ? 'api' : 'oauth',
+      allow_overflow: input.allow_overflow === true || Number(input.allow_overflow) === 1 ? 1 : 0,
       ...storedKeyScope(
         normalizeKeyScope({
           group_type: input.group_type,
@@ -270,6 +272,9 @@ export class ApiKeyStore {
         throw Object.assign(new Error('invalid status'), { code: 'invalid_status' })
       }
       rec.status = st
+    }
+    if (patch.allow_overflow != null) {
+      rec.allow_overflow = patch.allow_overflow === true || Number(patch.allow_overflow) === 1 ? 1 : 0
     }
     if (patch.max_concurrency != null)
       rec.max_concurrency = clampInt(patch.max_concurrency, 0, 128, rec.max_concurrency)

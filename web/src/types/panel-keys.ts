@@ -16,6 +16,7 @@ export type ApiKeyItem = {
   status?: string
   category?: 'oauth' | 'api'
   max_concurrency?: number
+  allow_overflow?: boolean
   quota_requests?: number
   quota_used?: number
   quota_usd?: number
