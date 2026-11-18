@@ -23,7 +23,7 @@ const UPSTREAM_PATH = '/backend-api/codex/responses'
 // 把客户端的 Desktop(Mac) 原样透传，等于告诉上游「Mac 桌面端从机房 IP 发请求」，
 // 指纹自相矛盾；实测透传 Desktop 也不可行。
 const LINUX_OS = 'Linux 6.12.111+deb13-amd64'
-const CLI_VERSION = '0.165.0'
+const CLI_VERSION = '0.170.0'
 const CLI_ORIGINATOR = 'codex_exec'
 const DEFAULT_UA = `${CLI_ORIGINATOR}/${CLI_VERSION} (${LINUX_OS}; x86_64)`
 const IDENTITY = {

@@ -83,7 +83,7 @@ import { clientIp } from '../pool/sticky-router.mjs'
 // 不铸票，随后按低档服务 —— 这正是「降智商」的机制。
 const CODEX_IDENTITY_DEFAULTS = Object.freeze({
   originator: 'codex_cli_rs',
-  version: '0.160.0',
+  version: '0.170.0',
   'openai-beta': 'responses=experimental',
 })
 
