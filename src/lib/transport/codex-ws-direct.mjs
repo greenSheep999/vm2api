@@ -23,7 +23,7 @@ const WebSocket = wsPkg.WebSocket ?? wsPkg.default
 export const WS_BETA = 'responses_websockets=2026-02-06'
 export const WS_PATH = '/backend-api/codex/responses'
 export const WS_CLI_UA =
-  'codex_exec/0.165.0 (Debian 12.0.0; x86_64) unknown (codex_exec; 0.165.0)'
+  'codex_exec/0.170.0 (Debian 12.0.0; x86_64) unknown (codex_exec; 0.170.0)'
 
 /**
  * 槽位 WS 模式：
@@ -97,7 +97,7 @@ function connect({ token, sessionId, timeoutMs = 15_000, agent = null }) {
         Authorization: `Bearer ${token}`,
         'OpenAI-Beta': WS_BETA,
         originator: 'codex_exec',
-        version: '0.165.0',
+        version: '0.170.0',
         'User-Agent': WS_CLI_UA,
         'session-id': sessionId,
         'thread-id': sessionId,
