@@ -32,6 +32,8 @@ export type HarvestTicket = {
   probe_verdict?: string | null
   probe_at?: string | null
   probe_detail?: string | null
+  /** 能力题（糖果题）最新结论：pass/fail，只有它能判「满血/降智」。 */
+  capability_verdict?: string | null
 }
 
 export type HarvestAccount = {
@@ -459,7 +461,13 @@ export function HarvestPane() {
                   const chips = a.skip_harvest
                     ? [{ label: '不参与', tone: 'muted' as const, hint: '该账号已跳过打票' }]
                     : t.verdict
-                      ? logChips({ model: t.model, ticketVerdict: t.verdict, ticketLen: t.len, probeVerdict: t.probe_verdict })
+                      ? logChips({
+                          model: t.model,
+                          ticketVerdict: t.verdict,
+                          ticketLen: t.len,
+                          probeVerdict: t.probe_verdict,
+                          capabilityVerdict: t.capability_verdict,
+                        })
                       : [{ label: '未打票', tone: 'muted' as const, hint: '还没有对这个模型打过票' }]
                   return (
                     <div

@@ -2034,7 +2034,7 @@ export function createPanelHandler(ctx) {
           return json(res, 200, {
             ok: true,
             data: {
-              ...harvestOverview(cfg.paths.project),
+              ...harvestOverview(cfg.paths.project, { models: routing?.codex?.ticket?.models || null }),
               policy: routing?.codex?.ticket || null,
             },
           })

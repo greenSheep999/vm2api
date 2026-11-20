@@ -31,6 +31,8 @@ export interface TicketStateInput {
   ticketLen?: number | null
   /** healthy / healthy_same / degraded / route_changed / inconclusive / no_ticket / null */
   probeVerdict?: string | null
+  /** 能力题结论（糖果题）：pass / fail / structure_ok / recorded / null。只有它才能判定「降智」。 */
+  capabilityVerdict?: string | null
 }
 
 /** 票本身：只回答「这次有没有拿到票」。 */
@@ -52,19 +54,24 @@ export function ticketChip(input: TicketStateInput): Chip {
   return { label: `有票·${len}`, tone: 'ok', hint: `上游返回了 ${len} 字符的回合票，且续接正常` }
 }
 
-/** 续接：只回答「这张票还能不能续」。低阶模型不给满血/降智。 */
+/**
+ * 续接：只回答「这张票还能不能续」。
+ *
+ * 设计约定（与文件头一致）：**降智只能由能力题判定**。探针结论属于「疑似」级证据，
+ * 所以 degraded 只输出「票断」/「疑降智」，绝不直接给「降智」；低阶模型更是只给「断票」。
+ */
 export function continuityChip(input: TicketStateInput): Chip {
   const capable = isCapableModel(input.model)
   const p = input.probeVerdict
   if (!p) return { label: '未验', tone: 'muted', hint: '还没跑过两发探针，续接能力未知' }
   if (p === 'healthy' || p === 'healthy_same') {
     return capable
-      ? { label: '满血', tone: 'ok', hint: '两发探针：第二发没有重铸票，且能答对能力题' }
+      ? { label: '可续', tone: 'ok', hint: '两发探针：第二发没有重铸票；能力档位另由糖果题判定' }
       : { label: '可续', tone: 'ok', hint: '两发探针：第二发没有重铸票（该模型不做能力题判定）' }
   }
   if (p === 'degraded') {
     return capable
-      ? { label: '降智', tone: 'bad', hint: '两发探针：第二发被上游重铸票，票续不住' }
+      ? { label: '疑降智', tone: 'warn', hint: '两发探针：第二发被上游重铸票；这是疑似信号，确认要看糖果题' }
       : { label: '断票', tone: 'bad', hint: '两发探针：第二发被上游重铸票（该模型不做能力题判定）' }
   }
   if (p === 'route_changed') {
@@ -79,10 +86,26 @@ export function continuityChip(input: TicketStateInput): Chip {
   return { label: '未验', tone: 'muted', hint: `未知的探针结论：${p}` }
 }
 
+/** 能力：只有糖果题能判「满血 / 降智」，且只对 6 系模型有意义。 */
+export function capabilityChip(input: TicketStateInput): Chip | null {
+  if (!isCapableModel(input.model)) return null
+  const v = input.capabilityVerdict
+  if (!v) return null
+  if (v === 'pass' || v === 'structure_ok') {
+    return { label: '满血', tone: 'ok', hint: '糖果题答对，能力档位正常' }
+  }
+  if (v === 'fail' || v === 'recorded') {
+    return { label: '降智', tone: 'bad', hint: '糖果题未答对，能力档位下降' }
+  }
+  return null
+}
+
 /** 日志行用：票 + 续接两个徽标（能力题结论不在日志维度里）。 */
 export function logChips(input: TicketStateInput): Chip[] {
   const chips: Chip[] = [ticketChip(input)]
   if (input.ticketVerdict === 'ok' || input.probeVerdict) chips.push(continuityChip(input))
+  const ability = capabilityChip(input)
+  if (ability) chips.push(ability)
   return chips
 }
 

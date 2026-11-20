@@ -339,8 +339,30 @@ function readRecentActiveVms(projectRoot) {
 }
 
 /** 面板用快照：账号 + 开关 + 每模型票状态。 */
-export function harvestOverview(projectRoot) {
+
+/** 每个 (槽位, 模型) 最近一次能力题（candy/pelican）结论；只有它能判定「降智」。 */
+function readLatestCandyVerdicts() {
+  const out = new Map()
+  try {
+    const rows = getDb()
+      .prepare(
+        `SELECT vm_id, model, verdict FROM (
+           SELECT vm_id, model, verdict,
+                  ROW_NUMBER() OVER (PARTITION BY vm_id, model ORDER BY finished_at DESC) AS rn
+             FROM iq_task_runs
+            WHERE question_id IN ('candy', 'pelican')
+         ) WHERE rn = 1`,
+      )
+      .all()
+    for (const row of rows) out.set(`${row.vm_id}\u0000${row.model}`, row.verdict || null)
+  } catch {}
+  return out
+}
+
+export function harvestOverview(projectRoot, { models: policyModels = null } = {}) {
   const flags = readAccountFlags()
+  const listedModels = Array.isArray(policyModels) && policyModels.length ? policyModels : DEFAULT_MODELS
+  const candy = readLatestCandyVerdicts()
   const snaps = readSnapshots()
   const vms = listVms(projectRoot) || []
   const accounts = vms
@@ -370,10 +392,14 @@ export function harvestOverview(projectRoot) {
         })
       }
       // 没采集过的模型也要列出来，否则面板只显示「打过的那一个」。
-      for (const model of DEFAULT_MODELS) {
+      // 没采集过的模型也要列出来：用策略里的模型清单（含新模型），不是写死的 5 个。
+      for (const model of listedModels) {
         if (!models.some((item) => item.model === model)) {
           models.push({ model, verdict: null, blocks: null, len: null, probe_verdict: null, probe_at: null })
         }
+      }
+      for (const item of models) {
+        item.capability_verdict = candy.get(`${vm.id}\u0000${item.model}`) || null
       }
       models.sort((a, b) => String(a.model).localeCompare(String(b.model)))
       return {
